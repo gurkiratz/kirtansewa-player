@@ -1,5 +1,5 @@
-import { useState, useMemo, useEffect, useRef } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useState, useMemo, useEffect, useRef, useLayoutEffect } from "react";
+import { useNavigate, useNavigationType, useSearchParams } from "react-router-dom";
 import { ArrowUpDown, Bookmark, LayoutGrid, List } from "lucide-react";
 import { useDataStore } from "../store/dataStore";
 import { useLibraryStore } from "../store/libraryStore";
@@ -10,6 +10,21 @@ type SortKey = "name" | "favorites";
 type ViewMode = "grid" | "list";
 
 const PAGE_SIZE = 20;
+const SCROLL_STATE_KEY = "artist-grid-scroll";
+
+type SavedScroll = { scrollTop: number; visibleCount: number };
+
+function readSavedScroll(): SavedScroll | null {
+  try {
+    const raw = sessionStorage.getItem(SCROLL_STATE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as SavedScroll;
+    if (typeof parsed.scrollTop !== "number" || typeof parsed.visibleCount !== "number") return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
 
 export function ArtistGrid() {
   const artists = useDataStore((s) => s.artists);
@@ -57,13 +72,70 @@ export function ArtistGrid() {
       });
   }, [artists, favoriteArtists, query, sortBy]);
 
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const navigationType = useNavigationType();
+  const shouldRestoreRef = useRef(navigationType === "POP");
+  const savedScrollRef = useRef<SavedScroll | null>(
+    shouldRestoreRef.current ? readSavedScroll() : null
+  );
+  const [visibleCount, setVisibleCount] = useState(
+    () => savedScrollRef.current?.visibleCount ?? PAGE_SIZE
+  );
   const scrollRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
+  const didRestoreScrollRef = useRef(false);
+  const latestScrollTopRef = useRef(savedScrollRef.current?.scrollTop ?? 0);
+  const visibleCountRef = useRef(visibleCount);
+  visibleCountRef.current = visibleCount;
 
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
   }, [query, sortBy]);
+
+  // Restore scroll position once content is rendered (after loading finishes).
+  useLayoutEffect(() => {
+    if (didRestoreScrollRef.current) return;
+    if (loading) return;
+    const saved = savedScrollRef.current;
+    const root = scrollRef.current;
+    if (!saved || !root) {
+      didRestoreScrollRef.current = true;
+      return;
+    }
+    root.scrollTop = saved.scrollTop;
+    latestScrollTopRef.current = saved.scrollTop;
+    didRestoreScrollRef.current = true;
+  }, [loading]);
+
+  // Track latest scroll position via scroll event (refs survive unmount).
+  useEffect(() => {
+    const root = scrollRef.current;
+    if (!root) return;
+    const onScroll = () => {
+      latestScrollTopRef.current = root.scrollTop;
+    };
+    root.addEventListener("scroll", onScroll, { passive: true });
+    return () => root.removeEventListener("scroll", onScroll);
+  }, [loading]);
+
+  // Persist on unmount and on pagehide using refs (DOM may be detached at cleanup).
+  useEffect(() => {
+    const save = () => {
+      const state: SavedScroll = {
+        scrollTop: latestScrollTopRef.current,
+        visibleCount: visibleCountRef.current,
+      };
+      try {
+        sessionStorage.setItem(SCROLL_STATE_KEY, JSON.stringify(state));
+      } catch {
+        // ignore quota errors
+      }
+    };
+    window.addEventListener("pagehide", save);
+    return () => {
+      window.removeEventListener("pagehide", save);
+      save();
+    };
+  }, []);
 
   useEffect(() => {
     const el = sentinelRef.current;
