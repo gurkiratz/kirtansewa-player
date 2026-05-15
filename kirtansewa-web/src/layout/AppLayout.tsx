@@ -34,18 +34,60 @@ const SIDEBAR_KEY = 'sidebar-collapsed';
 
 export function AppLayout() {
   const fetchAll = useDataStore((s) => s.fetchAll);
+  const imageUrls = useDataStore((s) => s.imageUrls);
   const queue = usePlayerStore((s) => s.queue);
   const currentIndex = usePlayerStore((s) => s.currentIndex);
+  const isPlaying = usePlayerStore((s) => s.isPlaying);
+  const togglePlay = usePlayerStore((s) => s.togglePlay);
+  const next = usePlayerStore((s) => s.next);
+  const prev = usePlayerStore((s) => s.prev);
+  const seekTo = usePlayerStore((s) => s.seekTo);
   useKeyboard();
 
   useEffect(() => {
     fetchAll();
   }, [fetchAll]);
 
+  // Wire MediaSession action handlers once. These let iOS lock screen /
+  // Control Center / Android notification controls drive playback.
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return;
+    const ms = navigator.mediaSession;
+    ms.setActionHandler('play', () => togglePlay());
+    ms.setActionHandler('pause', () => togglePlay());
+    ms.setActionHandler('previoustrack', () => prev());
+    ms.setActionHandler('nexttrack', () => next());
+    try {
+      ms.setActionHandler('seekto', (details) => {
+        const t = details.seekTime;
+        const dur = usePlayerStore.getState().duration;
+        if (typeof t === 'number' && dur > 0) seekTo(t / dur);
+      });
+    } catch {
+      // older browsers may not support seekto
+    }
+    return () => {
+      ms.setActionHandler('play', null);
+      ms.setActionHandler('pause', null);
+      ms.setActionHandler('previoustrack', null);
+      ms.setActionHandler('nexttrack', null);
+      try { ms.setActionHandler('seekto', null); } catch { /* noop */ }
+    };
+  }, [togglePlay, next, prev, seekTo]);
+
+  // Reflect play/pause state on the OS widget.
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return;
+    navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
+  }, [isPlaying]);
+
   const faviconObjectUrl = useRef<string | null>(null);
 
   useEffect(() => {
     const track = currentIndex >= 0 ? queue[currentIndex] : null;
+    const artwork =
+      track?.coverUrl ??
+      (track?.artistSlug ? imageUrls.get(track.artistSlug) ?? null : null);
 
     if (track) {
       const parts = [track.displayName, track.artistLabel].filter(Boolean);
@@ -54,12 +96,34 @@ export function AppLayout() {
       document.title = DEFAULT_TITLE;
     }
 
+    // Update MediaSession metadata for lock screen / Control Center.
+    if ('mediaSession' in navigator) {
+      if (track) {
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: track.displayName,
+          artist: track.artistLabel ?? '',
+          album: 'Kirtan Sewa',
+          artwork: artwork
+            ? [
+                { src: artwork, sizes: '96x96', type: 'image/jpeg' },
+                { src: artwork, sizes: '192x192', type: 'image/jpeg' },
+                { src: artwork, sizes: '256x256', type: 'image/jpeg' },
+                { src: artwork, sizes: '384x384', type: 'image/jpeg' },
+                { src: artwork, sizes: '512x512', type: 'image/jpeg' },
+              ]
+            : [],
+        });
+      } else {
+        navigator.mediaSession.metadata = null;
+      }
+    }
+
     if (faviconObjectUrl.current) {
       URL.revokeObjectURL(faviconObjectUrl.current);
       faviconObjectUrl.current = null;
     }
 
-    if (!track?.coverUrl) {
+    if (!artwork) {
       setFavicon(DEFAULT_FAVICON, 'image/svg+xml');
       return;
     }
@@ -99,7 +163,7 @@ export function AppLayout() {
     img.onerror = () => {
       setFavicon(DEFAULT_FAVICON, 'image/svg+xml');
     };
-    img.src = track.coverUrl;
+    img.src = artwork;
 
     return () => {
       if (faviconObjectUrl.current) {
@@ -107,7 +171,7 @@ export function AppLayout() {
         faviconObjectUrl.current = null;
       }
     };
-  }, [queue, currentIndex]);
+  }, [queue, currentIndex, imageUrls]);
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     () => localStorage.getItem(SIDEBAR_KEY) === '1',
