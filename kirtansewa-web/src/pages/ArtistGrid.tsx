@@ -80,6 +80,7 @@ export function ArtistGrid() {
   const [visibleCount, setVisibleCount] = useState(
     () => savedScrollRef.current?.visibleCount ?? PAGE_SIZE
   );
+  const [restored, setRestored] = useState(() => !savedScrollRef.current);
   const scrollRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const didRestoreScrollRef = useRef(false);
@@ -97,13 +98,12 @@ export function ArtistGrid() {
     if (loading) return;
     const saved = savedScrollRef.current;
     const root = scrollRef.current;
-    if (!saved || !root) {
-      didRestoreScrollRef.current = true;
-      return;
+    if (saved && root) {
+      root.scrollTop = saved.scrollTop;
+      latestScrollTopRef.current = saved.scrollTop;
     }
-    root.scrollTop = saved.scrollTop;
-    latestScrollTopRef.current = saved.scrollTop;
     didRestoreScrollRef.current = true;
+    setRestored(true);
   }, [loading]);
 
   // Track latest scroll position via scroll event (refs survive unmount).
@@ -168,7 +168,11 @@ export function ArtistGrid() {
   }
 
   return (
-    <div ref={scrollRef} className="flex-1 overflow-y-auto">
+    <div
+      ref={scrollRef}
+      className="flex-1 overflow-y-auto"
+      style={{ visibility: restored ? "visible" : "hidden" }}
+    >
       {/* Toolbar */}
       <div className="sticky top-0 z-10 bg-surface border-b border-border px-4 md:px-5 py-2.5 flex items-center gap-6">
         <button
