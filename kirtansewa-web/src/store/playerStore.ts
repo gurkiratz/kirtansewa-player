@@ -70,6 +70,36 @@ function teardownAudio() {
     _audio.load();
     _audio = null;
   }
+  clearPositionState();
+}
+
+function updatePositionState() {
+  if (!_audio) return;
+  if (!('mediaSession' in navigator)) return;
+  const ms = navigator.mediaSession;
+  if (typeof ms.setPositionState !== 'function') return;
+  const duration = _audio.duration;
+  if (!isFinite(duration) || duration <= 0) return;
+  try {
+    ms.setPositionState({
+      duration,
+      position: Math.min(_audio.currentTime, duration),
+      playbackRate: _audio.playbackRate || 1,
+    });
+  } catch {
+    // some browsers throw on invalid state; ignore
+  }
+}
+
+function clearPositionState() {
+  if (!('mediaSession' in navigator)) return;
+  const ms = navigator.mediaSession;
+  if (typeof ms.setPositionState !== 'function') return;
+  try {
+    ms.setPositionState();
+  } catch {
+    // ignore
+  }
 }
 
 export const usePlayerStore = create<PlayerStore>()(
@@ -78,22 +108,29 @@ export const usePlayerStore = create<PlayerStore>()(
       function attachListeners(audio: HTMLAudioElement, autoplay: boolean) {
         audio.addEventListener('loadedmetadata', () => {
           set({ duration: audio.duration || 0 });
+          updatePositionState();
         });
         audio.addEventListener('durationchange', () => {
           set({ duration: audio.duration || 0 });
+          updatePositionState();
         });
         audio.addEventListener('play', () => {
           set({ isPlaying: true });
           startRaf(get()._tick);
+          updatePositionState();
         });
         audio.addEventListener('pause', () => {
           cancelRaf();
           set({ isPlaying: false, isBuffering: false });
+          updatePositionState();
         });
         audio.addEventListener('ended', () => {
           cancelRaf();
           set({ isPlaying: false, isBuffering: false });
           get().next();
+        });
+        audio.addEventListener('seeked', () => {
+          updatePositionState();
         });
         audio.addEventListener('waiting', () => {
           set({ isBuffering: true });
