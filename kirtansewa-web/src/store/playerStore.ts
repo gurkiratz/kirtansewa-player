@@ -16,6 +16,7 @@ interface PlayerState {
   duration: number;
   isMuted: boolean;
   isQueueSheetOpen: boolean;
+  isBuffering: boolean;
 }
 
 interface PlayerActions {
@@ -87,15 +88,28 @@ export const usePlayerStore = create<PlayerStore>()(
         });
         audio.addEventListener('pause', () => {
           cancelRaf();
-          set({ isPlaying: false });
+          set({ isPlaying: false, isBuffering: false });
         });
         audio.addEventListener('ended', () => {
           cancelRaf();
-          set({ isPlaying: false });
+          set({ isPlaying: false, isBuffering: false });
           get().next();
+        });
+        audio.addEventListener('waiting', () => {
+          set({ isBuffering: true });
+        });
+        audio.addEventListener('stalled', () => {
+          set({ isBuffering: true });
+        });
+        audio.addEventListener('playing', () => {
+          set({ isBuffering: false });
+        });
+        audio.addEventListener('canplay', () => {
+          set({ isBuffering: false });
         });
         audio.addEventListener('error', () => {
           console.error('Audio load error:', audio.error);
+          set({ isBuffering: false });
         });
         if (autoplay) {
           const playPromise = audio.play();
@@ -117,6 +131,7 @@ export const usePlayerStore = create<PlayerStore>()(
         duration: 0,
         isMuted: false,
         isQueueSheetOpen: false,
+        isBuffering: false,
 
         addToQueue: (tracks) => {
           const { queue } = get();
@@ -125,7 +140,7 @@ export const usePlayerStore = create<PlayerStore>()(
 
         clearQueue: () => {
           teardownAudio();
-          set({ queue: [], currentIndex: -1, isPlaying: false, seek: 0, seekSeconds: 0, duration: 0 });
+          set({ queue: [], currentIndex: -1, isPlaying: false, seek: 0, seekSeconds: 0, duration: 0, isBuffering: false });
         },
 
         replaceQueue: (tracks) => {
@@ -183,7 +198,7 @@ export const usePlayerStore = create<PlayerStore>()(
           _audio = audio;
 
           attachListeners(audio, true);
-          set({ currentIndex: index, seek: 0, seekSeconds: 0, duration: 0 });
+          set({ currentIndex: index, seek: 0, seekSeconds: 0, duration: 0, isBuffering: true });
         },
 
         togglePlay: () => {

@@ -12,6 +12,7 @@ import {
   ListPlus,
   Cast,
   Music2,
+  Loader2,
 } from "lucide-react";
 import { usePlayerStore } from "../store/playerStore";
 import { useLibraryStore } from "../store/libraryStore";
@@ -48,6 +49,7 @@ export function PlayerDock() {
   const queue = usePlayerStore((s) => s.queue);
   const currentIndex = usePlayerStore((s) => s.currentIndex);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
+  const isBuffering = usePlayerStore((s) => s.isBuffering);
   const repeatMode = usePlayerStore((s) => s.repeatMode);
   const togglePlay = usePlayerStore((s) => s.togglePlay);
   const next = usePlayerStore((s) => s.next);
@@ -188,7 +190,9 @@ export function PlayerDock() {
             className="w-10 h-10 rounded-full bg-gold flex items-center justify-center text-surface hover:bg-gold/85 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
             title="Play/Pause"
           >
-            {isPlaying ? (
+            {isBuffering && isPlaying ? (
+              <Loader2 size={18} className="animate-spin" />
+            ) : isPlaying ? (
               <Pause size={18} />
             ) : (
               <Play size={18} className="mx-0.5" />
@@ -271,7 +275,9 @@ export function PlayerDock() {
               className="w-10 h-10 rounded-full bg-gold flex items-center justify-center text-surface hover:bg-gold/85 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
               title="Play/Pause (Space)"
             >
-              {isPlaying ? (
+              {isBuffering && isPlaying ? (
+                <Loader2 size={18} className="animate-spin" />
+              ) : isPlaying ? (
                 <Pause size={18} />
               ) : (
                 <Play size={18} className="mx-0.5" />
