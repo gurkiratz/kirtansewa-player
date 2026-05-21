@@ -17,6 +17,7 @@ interface PlayerState {
   isMuted: boolean;
   isQueueSheetOpen: boolean;
   isBuffering: boolean;
+  buffered: number;
 }
 
 interface PlayerActions {
@@ -105,6 +106,24 @@ function clearPositionState() {
 export const usePlayerStore = create<PlayerStore>()(
   persist(
     (set, get) => {
+      function updateBuffered() {
+        if (!_audio) return;
+        const duration = _audio.duration;
+        if (!isFinite(duration) || duration <= 0) return;
+        const ranges = _audio.buffered;
+        if (ranges.length === 0) return;
+        const t = _audio.currentTime;
+        let end = 0;
+        for (let i = 0; i < ranges.length; i++) {
+          if (ranges.start(i) <= t && t <= ranges.end(i)) {
+            end = ranges.end(i);
+            break;
+          }
+          end = Math.max(end, ranges.end(i));
+        }
+        set({ buffered: Math.min(1, end / duration) });
+      }
+
       function attachListeners(audio: HTMLAudioElement, autoplay: boolean) {
         audio.addEventListener('loadedmetadata', () => {
           set({ duration: audio.duration || 0 });
@@ -148,6 +167,9 @@ export const usePlayerStore = create<PlayerStore>()(
           console.error('Audio load error:', audio.error);
           set({ isBuffering: false });
         });
+        audio.addEventListener('progress', () => {
+          updateBuffered();
+        });
         if (autoplay) {
           const playPromise = audio.play();
           if (playPromise && typeof playPromise.catch === 'function') {
@@ -169,6 +191,7 @@ export const usePlayerStore = create<PlayerStore>()(
         isMuted: false,
         isQueueSheetOpen: false,
         isBuffering: false,
+        buffered: 0,
 
         addToQueue: (tracks) => {
           const { queue } = get();
@@ -177,7 +200,7 @@ export const usePlayerStore = create<PlayerStore>()(
 
         clearQueue: () => {
           teardownAudio();
-          set({ queue: [], currentIndex: -1, isPlaying: false, seek: 0, seekSeconds: 0, duration: 0, isBuffering: false });
+          set({ queue: [], currentIndex: -1, isPlaying: false, seek: 0, seekSeconds: 0, duration: 0, isBuffering: false, buffered: 0 });
         },
 
         replaceQueue: (tracks) => {
@@ -235,7 +258,7 @@ export const usePlayerStore = create<PlayerStore>()(
           _audio = audio;
 
           attachListeners(audio, true);
-          set({ currentIndex: index, seek: 0, seekSeconds: 0, duration: 0, isBuffering: true });
+          set({ currentIndex: index, seek: 0, seekSeconds: 0, duration: 0, isBuffering: true, buffered: 0 });
         },
 
         togglePlay: () => {
@@ -384,6 +407,7 @@ export const usePlayerStore = create<PlayerStore>()(
           if (isFinite(duration) && duration > 0) {
             set({ seek: currentSecs / duration, seekSeconds: currentSecs });
           }
+          updateBuffered();
         },
       };
     },
