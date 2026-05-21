@@ -15,7 +15,7 @@ const SITE_NAME = 'Kirtan Sewa Player'
 const HOME_TITLE = 'Kirtan Sewa Player'
 const HOME_DESC =
   'Browse and listen to a vast catalog of Puratan Gurbani Kirtan'
-const HOME_IMAGE = `${SITE_URL}/og-image-2-reduced.png`
+const HOME_IMAGE = `${SITE_URL}/og-image-3-reduced.png`
 const HOME_TWITTER_IMAGE = `${SITE_URL}/twitter-image.png`
 const DEFAULT_OG_IMAGE = HOME_IMAGE
 const DEFAULT_TWITTER_IMAGE = HOME_TWITTER_IMAGE
