@@ -2,6 +2,12 @@
 
 All notable changes to the Kirtansewa catalog and player. Tags: **[Web]** = React app · **[Scraper]** = Python pipeline.
 
+## 2026-05-31
+
+- **[Web]** Fixed shuffle to use a fixed playback order — skipping forward/back and replaying now navigate the same pre-generated sequence instead of re-randomizing on each skip.
+- **[Web]** Queue display now matches shuffle playback order; original track order is saved to localStorage and restored when shuffle is turned off.
+- **[Web]** Fixed active track highlight on artist page not appearing when shuffle is on.
+
 ## 2026-05-21
 
 - **[Web]** Reduced OG image size for faster social previews.

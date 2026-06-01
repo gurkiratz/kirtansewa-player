@@ -319,21 +319,27 @@ function TrackSection({
 
   const allTracks = detail.tracks.map((r) => toTrack(r, meta));
 
+  const artistTrackUrls = new Set(allTracks.map((t) => t.url));
   const isThisArtistQueue =
     queue.length === allTracks.length &&
-    allTracks.every((t, i) => queue[i]?.url === t.url);
+    queue.every((t) => artistTrackUrls.has(t.url));
+
+  const currentTrackUrl = currentIndex >= 0 ? queue[currentIndex]?.url : null;
+  const activeIndex = isThisArtistQueue && currentTrackUrl
+    ? allTracks.findIndex((t) => t.url === currentTrackUrl)
+    : -1;
 
   const handleTrackClick = (index: number) => {
     if (isThisArtistQueue) {
-      playTrack(index);
+      const clickedUrl = allTracks[index].url;
+      const queueIndex = queue.findIndex((t) => t.url === clickedUrl);
+      playTrack(queueIndex >= 0 ? queueIndex : index);
     } else {
       clearQueue();
       addToQueue(allTracks);
       playTrack(index);
     }
   };
-
-  const activeIndex = isThisArtistQueue ? currentIndex : -1;
 
   const q = query.trim().toLowerCase();
   const visibleTracks = q
