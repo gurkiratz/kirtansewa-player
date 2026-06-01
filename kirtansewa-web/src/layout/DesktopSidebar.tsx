@@ -13,7 +13,7 @@ const NAV_ITEMS = [
   { to: "/library", label: "Library", icon: Library },
 ];
 
-const GITHUB_URL = "https://github.com/gurkiratz/kirtansewa-scrape";
+const GITHUB_URL = "https://github.com/gurkiratz/kirtansewa-player";
 
 interface Props {
   collapsed: boolean;

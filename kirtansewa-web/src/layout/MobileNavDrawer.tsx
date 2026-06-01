@@ -3,7 +3,7 @@ import { NavLink, useLocation } from "react-router-dom";
 import { X, Home, Library, Info } from "lucide-react";
 import { SiGithub } from "@icons-pack/react-simple-icons";
 
-const GITHUB_URL = "https://github.com/gurkiratz/kirtansewa-scrape";
+const GITHUB_URL = "https://github.com/gurkiratz/kirtansewa-player";
 
 const NAV_ITEMS = [
   { to: "/", label: "Home", icon: Home },
