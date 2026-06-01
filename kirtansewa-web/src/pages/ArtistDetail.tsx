@@ -24,6 +24,7 @@ export function ArtistDetail() {
   const addToQueue = usePlayerStore((s) => s.addToQueue);
   const clearQueue = usePlayerStore((s) => s.clearQueue);
   const replaceQueue = usePlayerStore((s) => s.replaceQueue);
+  const shuffleAndPlay = usePlayerStore((s) => s.shuffleAndPlay);
   const playTrack = usePlayerStore((s) => s.playTrack);
   const isShuffle = usePlayerStore((s) => s.isShuffle);
   const toggleShuffle = usePlayerStore((s) => s.toggleShuffle);
@@ -109,15 +110,12 @@ export function ArtistDetail() {
     if (!detail) return;
     const tracks = detail.tracks.map((r) => toTrack(r, meta));
     if (!isShuffled) {
-      clearQueue();
-      const shuffled = [...tracks].sort(() => Math.random() - 0.5);
-      addToQueue(shuffled);
-      if (!isShuffle) toggleShuffle();
-      playTrack(0);
+      shuffleAndPlay(tracks);
       setIsShuffled(true);
     } else {
       replaceQueue(tracks);
       if (isShuffle) toggleShuffle();
+      playTrack(0);
       setIsShuffled(false);
     }
   };

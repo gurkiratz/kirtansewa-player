@@ -6,6 +6,7 @@ export type RepeatMode = 'none' | 'one' | 'all';
 
 interface PlayerState {
   queue: Track[];
+  originalQueue: Track[];
   currentIndex: number;
   isPlaying: boolean;
   isShuffle: boolean;
@@ -24,6 +25,7 @@ interface PlayerActions {
   addToQueue: (tracks: Track[]) => void;
   clearQueue: () => void;
   replaceQueue: (tracks: Track[]) => void;
+  shuffleAndPlay: (tracks: Track[]) => void;
   trimQueueToCurrent: () => void;
   removeFromQueue: (index: number) => void;
   playTrack: (index: number) => void;
@@ -90,6 +92,15 @@ function updatePositionState() {
   } catch {
     // some browsers throw on invalid state; ignore
   }
+}
+
+function shuffleArray<T>(arr: T[]): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
 }
 
 function clearPositionState() {
@@ -180,6 +191,7 @@ export const usePlayerStore = create<PlayerStore>()(
 
       return {
         queue: [],
+        originalQueue: [],
         currentIndex: -1,
         isPlaying: false,
         isShuffle: false,
@@ -194,20 +206,41 @@ export const usePlayerStore = create<PlayerStore>()(
         buffered: 0,
 
         addToQueue: (tracks) => {
-          const { queue } = get();
-          set({ queue: [...queue, ...tracks] });
+          const { queue, isShuffle, originalQueue } = get();
+          set({
+            queue: [...queue, ...tracks],
+            originalQueue: isShuffle ? [...originalQueue, ...tracks] : originalQueue,
+          });
         },
 
         clearQueue: () => {
           teardownAudio();
-          set({ queue: [], currentIndex: -1, isPlaying: false, seek: 0, seekSeconds: 0, duration: 0, isBuffering: false, buffered: 0 });
+          set({ queue: [], originalQueue: [], currentIndex: -1, isPlaying: false, seek: 0, seekSeconds: 0, duration: 0, isBuffering: false, buffered: 0 });
+        },
+
+        shuffleAndPlay: (tracks) => {
+          teardownAudio();
+          const shuffled = shuffleArray(tracks);
+          set({
+            queue: shuffled,
+            originalQueue: tracks,
+            currentIndex: -1,
+            isShuffle: true,
+            isPlaying: false,
+            seek: 0,
+            seekSeconds: 0,
+            duration: 0,
+            isBuffering: false,
+            buffered: 0,
+          });
+          get().playTrack(0);
         },
 
         replaceQueue: (tracks) => {
           const { queue, currentIndex } = get();
           const currentUrl = currentIndex >= 0 ? queue[currentIndex]?.url : null;
           const newIndex = currentUrl ? tracks.findIndex((t) => t.url === currentUrl) : -1;
-          set({ queue: tracks, currentIndex: newIndex });
+          set({ queue: tracks, originalQueue: [], currentIndex: newIndex });
         },
 
         trimQueueToCurrent: () => {
@@ -216,11 +249,11 @@ export const usePlayerStore = create<PlayerStore>()(
             get().clearQueue();
             return;
           }
-          set({ queue: [queue[currentIndex]], currentIndex: 0 });
+          set({ queue: [queue[currentIndex]], originalQueue: [], currentIndex: 0 });
         },
 
         removeFromQueue: (index) => {
-          const { queue, currentIndex } = get();
+          const { queue, currentIndex, isShuffle, originalQueue } = get();
           if (index < 0 || index >= queue.length) return;
 
           if (queue.length === 1) {
@@ -228,18 +261,24 @@ export const usePlayerStore = create<PlayerStore>()(
             return;
           }
 
-          const next = [...queue];
-          next.splice(index, 1);
+          const removedUrl = queue[index].url;
+          const nextQueue = [...queue];
+          nextQueue.splice(index, 1);
+
+          const nextOriginal = isShuffle
+            ? originalQueue.filter((t) => t.url !== removedUrl)
+            : originalQueue;
 
           if (index === currentIndex) {
-            const newIndex = Math.min(index, next.length - 1);
-            set({ queue: next, currentIndex: -1 });
+            const newIndex = Math.min(index, nextQueue.length - 1);
+            set({ queue: nextQueue, originalQueue: nextOriginal, currentIndex: -1 });
             get().playTrack(newIndex);
             return;
           }
 
           set({
-            queue: next,
+            queue: nextQueue,
+            originalQueue: nextOriginal,
             currentIndex: index < currentIndex ? currentIndex - 1 : currentIndex,
           });
         },
@@ -278,7 +317,7 @@ export const usePlayerStore = create<PlayerStore>()(
         },
 
         next: () => {
-          const { queue, currentIndex, isShuffle, repeatMode } = get();
+          const { queue, currentIndex, repeatMode } = get();
           if (queue.length === 0) return;
 
           if (repeatMode === 'one') {
@@ -286,21 +325,15 @@ export const usePlayerStore = create<PlayerStore>()(
             return;
           }
 
-          let nextIndex: number;
-          if (isShuffle) {
-            nextIndex = Math.floor(Math.random() * queue.length);
-          } else {
-            nextIndex = currentIndex + 1;
-          }
-
+          const nextIndex = currentIndex + 1;
           if (nextIndex >= queue.length) {
             if (repeatMode === 'all') {
-              nextIndex = 0;
+              get().playTrack(0);
             } else {
               cancelRaf();
               set({ isPlaying: false, seek: 0, seekSeconds: 0 });
-              return;
             }
+            return;
           }
 
           get().playTrack(nextIndex);
@@ -343,7 +376,26 @@ export const usePlayerStore = create<PlayerStore>()(
         },
 
         toggleShuffle: () => {
-          set((s) => ({ isShuffle: !s.isShuffle }));
+          const { isShuffle, queue, currentIndex, originalQueue } = get();
+          if (!isShuffle) {
+            // Pin current track at position 0, shuffle the rest
+            const currentTrack = currentIndex >= 0 ? queue[currentIndex] : null;
+            const rest = queue.filter((_, i) => i !== currentIndex);
+            const shuffled = shuffleArray(rest);
+            const newQueue = currentTrack ? [currentTrack, ...shuffled] : shuffled;
+            set({ isShuffle: true, queue: newQueue, originalQueue: queue, currentIndex: currentTrack ? 0 : -1 });
+          } else {
+            // Restore original order, find current track's new position
+            if (originalQueue.length > 0) {
+              const currentUrl = currentIndex >= 0 ? queue[currentIndex]?.url : null;
+              const restoredIndex = currentUrl
+                ? originalQueue.findIndex((t) => t.url === currentUrl)
+                : -1;
+              set({ isShuffle: false, queue: originalQueue, originalQueue: [], currentIndex: restoredIndex });
+            } else {
+              set({ isShuffle: false });
+            }
+          }
         },
 
         cycleRepeat: () => {
@@ -413,10 +465,18 @@ export const usePlayerStore = create<PlayerStore>()(
     },
     {
       name: 'kirtansewa-player',
-      version: 1,
-      migrate: (persistedState) => persistedState,
+      version: 2,
+      migrate: (persistedState, version) => {
+        const s = persistedState as Record<string, unknown>;
+        if (version < 2) {
+          delete s.shuffleOrder;
+          s.originalQueue = [];
+        }
+        return s;
+      },
       partialize: (state) => ({
         queue: state.queue,
+        originalQueue: state.originalQueue,
         currentIndex: state.currentIndex,
         seekSeconds: state.seekSeconds,
         isShuffle: state.isShuffle,
