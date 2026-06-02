@@ -2,6 +2,15 @@
 
 All notable changes to the Kirtansewa catalog and player. Tags: **[Web]** = React app · **[Scraper]** = Python pipeline.
 
+## 2026-06-02
+
+- **[Web]** Download a single track via the three-dots menu on any track row.
+- **[Web]** Multi-select download — switch the artist page into select mode and download up to 50 tracks as one ZIP (`<artist>-<n>-tracks.zip`); "Select all" picks the first 50.
+- **[Web]** Download requests now retry once automatically on transient CDN/CORS failures.
+- **[Web]** The batch download dialog now lists the names of any tracks that couldn't be downloaded, instead of only a count.
+- **[Web]** Upgrade CDN track and image URLs from `http://` to `https://` to prevent mixed-content blocking on the HTTPS site.
+- **[Scraper]** Normalize scraped CDN URLs to `https://` so future scrapes don't reintroduce mixed content.
+
 ## 2026-05-31
 
 - **[Web]** Fixed shuffle to use a fixed playback order — skipping forward/back and replaying now navigate the same pre-generated sequence instead of re-randomizing on each skip.
