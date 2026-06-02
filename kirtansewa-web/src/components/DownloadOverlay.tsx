@@ -19,16 +19,17 @@ function BatchModal() {
 
   const inProgress = batch.status === 'downloading' || batch.status === 'zipping';
   const pct = batch.total > 0 ? Math.round((batch.done / batch.total) * 100) : 0;
+  const failedCount = batch.failedNames.length;
 
   return (
     <div className="fixed inset-0 z-55 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div className="bg-card border border-border rounded-2xl w-full max-w-sm shadow-2xl animate-in">
         <div className="p-5">
           <div className="flex items-center gap-3 mb-1">
-            {batch.status === 'done' && batch.failedCount === 0 && (
+            {batch.status === 'done' && failedCount === 0 && (
               <Check size={18} className="text-gold shrink-0" />
             )}
-            {(batch.status === 'error' || (batch.status === 'done' && batch.failedCount > 0)) && (
+            {(batch.status === 'error' || (batch.status === 'done' && failedCount > 0)) && (
               <AlertCircle size={18} className="text-red-400 shrink-0" />
             )}
             {inProgress && <Loader2 size={18} className="text-gold shrink-0 animate-spin" />}
@@ -60,7 +61,7 @@ function BatchModal() {
                   {batch.status === 'zipping'
                     ? 'Packaging files…'
                     : batch.status === 'done'
-                      ? `${batch.total - batch.failedCount} of ${batch.total} saved`
+                      ? `${batch.total - failedCount} of ${batch.total} saved`
                       : batch.currentName || 'Starting…'}
                 </span>
                 <span className="shrink-0 tabular-nums">
@@ -70,12 +71,27 @@ function BatchModal() {
             </div>
           )}
 
-          {batch.status === 'done' && batch.failedCount > 0 && (
-            <p className="text-red-400 text-xs mb-1">
-              {batch.failedCount} track{batch.failedCount > 1 ? 's' : ''} could not be downloaded.
-            </p>
+          {failedCount > 0 && (
+            <div className="mb-1">
+              <p className="text-red-400 text-xs mb-1.5">
+                {batch.status === 'error'
+                  ? 'No tracks could be downloaded:'
+                  : `${failedCount} track${failedCount > 1 ? 's' : ''} could not be downloaded:`}
+              </p>
+              <ul className="max-h-28 overflow-y-auto rounded-lg bg-red-400/10 border border-red-400/20 divide-y divide-red-400/10">
+                {batch.failedNames.map((name, i) => (
+                  <li
+                    key={i}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] text-text-primary"
+                  >
+                    <AlertCircle size={11} className="text-red-400 shrink-0" />
+                    <span className="truncate">{name}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
-          {batch.status === 'error' && (
+          {batch.status === 'error' && failedCount === 0 && (
             <p className="text-text-secondary text-xs mb-1">
               No tracks could be downloaded. Please try again.
             </p>

@@ -16,7 +16,7 @@ interface BatchJob {
   done: number;
   currentName: string;
   status: BatchStatus;
-  failedCount: number;
+  failedNames: string[];
 }
 
 interface DownloadState {
@@ -60,7 +60,7 @@ export const useDownloadStore = create<DownloadState & DownloadActions>()((set, 
     if (tracks.length === 0 || get().batch) return;
     _batchAbort = new AbortController();
     set({
-      batch: { label, total: tracks.length, done: 0, currentName: '', status: 'downloading', failedCount: 0 },
+      batch: { label, total: tracks.length, done: 0, currentName: '', status: 'downloading', failedNames: [] },
     });
     try {
       const result = await downloadTracksAsZip(tracks, zipFilename, {
@@ -87,7 +87,7 @@ export const useDownloadStore = create<DownloadState & DownloadActions>()((set, 
           ...b,
           status: result.succeeded === 0 ? 'error' : 'done',
           done: b.total,
-          failedCount: result.failed.length,
+          failedNames: result.failed.map((f) => f.name),
         },
       });
     } catch (e) {
