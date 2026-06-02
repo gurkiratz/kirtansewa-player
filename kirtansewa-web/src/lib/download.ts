@@ -17,6 +17,44 @@ function trackFilename(track: Track): string {
   return ensureMp3(sanitizeFilename(track.displayName || track.name));
 }
 
+/** Resolve after `ms`, or reject immediately if the signal aborts. */
+function delay(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(new DOMException('Aborted', 'AbortError'));
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(new DOMException('Aborted', 'AbortError'));
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
+/**
+ * Fetch with a retry on network/CORS failure. CloudFront occasionally serves a
+ * cached response missing the CORS header (when a no-Origin media request
+ * populated the cache first); a second request usually lands on a corrected
+ * cache entry. Only thrown errors (network/CORS) are retried — a returned HTTP
+ * status (e.g. 404) is final and surfaced to the caller.
+ */
+async function fetchWithRetry(url: string, signal?: AbortSignal, attempts = 2): Promise<Response> {
+  let lastErr: unknown;
+  for (let i = 0; i < attempts; i++) {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+    try {
+      return await fetch(url, { signal });
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError' || signal?.aborted) throw e;
+      lastErr = e;
+      if (i < attempts - 1) await delay(600, signal);
+    }
+  }
+  throw lastErr;
+}
+
 /** Trigger a browser "Save as" for an in-memory blob via a transient anchor. */
 export function triggerBlobDownload(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
@@ -32,7 +70,7 @@ export function triggerBlobDownload(blob: Blob, filename: string): void {
 
 /** Fetch a single track and save it. Throws on network/HTTP/CORS failure. */
 export async function downloadTrack(track: Track, signal?: AbortSignal): Promise<void> {
-  const res = await fetch(toHttps(track.url), { signal });
+  const res = await fetchWithRetry(toHttps(track.url), signal);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const blob = await res.blob();
   triggerBlobDownload(blob, trackFilename(track));
@@ -90,7 +128,7 @@ export async function downloadTracksAsZip(
       const displayName = track.displayName || track.name;
       onProgress?.({ done, total: tracks.length, currentName: displayName });
       try {
-        const res = await fetch(toHttps(track.url), { signal });
+        const res = await fetchWithRetry(toHttps(track.url), signal);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const blob = await res.blob();
         zip.file(uniqueName(ensureMp3(sanitizeFilename(displayName))), blob);
