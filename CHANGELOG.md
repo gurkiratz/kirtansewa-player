@@ -5,7 +5,10 @@ All notable changes to the Kirtansewa catalog and player. Tags: **[Web]** = Reac
 ## 2026-06-02
 
 - **[Web]** Download a single track via the three-dots menu on any track row.
+- **[Web]** Download the currently playing track directly from the player dock.
 - **[Web]** Multi-select download — switch the artist page into select mode and download up to 50 tracks as one ZIP (`<artist>-<n>-tracks.zip`); "Select all" picks the first 50.
+- **[Web]** Added a "Next 50" button in select mode to advance the selection window through long track lists (51–100, 101–150, …) and wrap back to the start.
+- **[Web]** Multi-select now tracks chosen tracks by position rather than URL, so artists with duplicate (identical-URL) recordings select and count correctly.
 - **[Web]** Download requests now retry once automatically on transient CDN/CORS failures.
 - **[Web]** The batch download dialog now lists the names of any tracks that couldn't be downloaded, instead of only a count.
 - **[Web]** Upgrade CDN track and image URLs from `http://` to `https://` to prevent mixed-content blocking on the HTTPS site.
