@@ -33,6 +33,15 @@ export function stripArtistPrefix(name: string): string {
   return name;
 }
 
+/**
+ * Upgrade http:// CDN links to https://. The app is served over HTTPS, so
+ * fetching/playing an http:// resource is blocked as mixed content. The CDN
+ * serves everything over HTTPS, so this upgrade is always safe.
+ */
+export function toHttps(url: string): string {
+  return url.startsWith('http://') ? 'https://' + url.slice('http://'.length) : url;
+}
+
 export interface TrackMeta {
   artistLabel?: string;
   coverUrl?: string | null;
@@ -43,9 +52,9 @@ export function toTrack(raw: RawTrack, meta?: TrackMeta): Track {
   return {
     name: raw.name,
     displayName: stripArtistPrefix(raw.name),
-    url: raw.url,
+    url: toHttps(raw.url),
     artistLabel: meta?.artistLabel,
-    coverUrl: meta?.coverUrl,
+    coverUrl: meta?.coverUrl ? toHttps(meta.coverUrl) : meta?.coverUrl,
     artistSlug: meta?.artistSlug,
   };
 }

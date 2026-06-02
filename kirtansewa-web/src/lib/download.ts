@@ -1,4 +1,4 @@
-import type { Track } from '../types';
+import { toHttps, type Track } from '../types';
 
 /** Strip characters that are illegal in filenames across OSes, collapse whitespace. */
 export function sanitizeFilename(name: string): string {
@@ -32,7 +32,7 @@ export function triggerBlobDownload(blob: Blob, filename: string): void {
 
 /** Fetch a single track and save it. Throws on network/HTTP/CORS failure. */
 export async function downloadTrack(track: Track, signal?: AbortSignal): Promise<void> {
-  const res = await fetch(track.url, { signal });
+  const res = await fetch(toHttps(track.url), { signal });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const blob = await res.blob();
   triggerBlobDownload(blob, trackFilename(track));
@@ -90,7 +90,7 @@ export async function downloadTracksAsZip(
       const displayName = track.displayName || track.name;
       onProgress?.({ done, total: tracks.length, currentName: displayName });
       try {
-        const res = await fetch(track.url, { signal });
+        const res = await fetch(toHttps(track.url), { signal });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const blob = await res.blob();
         zip.file(uniqueName(ensureMp3(sanitizeFilename(displayName))), blob);
