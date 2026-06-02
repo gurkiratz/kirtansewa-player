@@ -1,5 +1,5 @@
-import { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Play,
   Pause,
@@ -13,79 +13,92 @@ import {
   Cast,
   Music2,
   Loader2,
-} from "lucide-react";
-import { usePlayerStore } from "../store/playerStore";
-import { useLibraryStore } from "../store/libraryStore";
+  Download,
+} from 'lucide-react'
+import { usePlayerStore } from '../store/playerStore'
+import { useLibraryStore } from '../store/libraryStore'
+import { useDownloadStore } from '../store/downloadStore'
 // ProgressBar is kept as a fallback — swap WaveformBar ↔ ProgressBar to revert
-import { WaveformBar } from "./WaveformBar";
-import { VolumeControl } from "./VolumeControl";
+import { WaveformBar } from './WaveformBar'
+import { VolumeControl } from './VolumeControl'
 
 function TrackArt({
   src,
   label,
   size,
 }: {
-  src?: string | null;
-  label?: string;
-  size: number;
+  src?: string | null
+  label?: string
+  size: number
 }) {
   if (src) {
     return (
       <img
         src={src}
-        alt={label ?? ""}
+        alt={label ?? ''}
         className="w-full h-full object-cover rounded-sm"
       />
-    );
+    )
   }
   return (
     <div className="w-full h-full bg-card rounded-sm flex items-center justify-center text-text-muted">
       <Music2 size={size} />
     </div>
-  );
+  )
 }
 
 export function PlayerDock() {
-  const queue = usePlayerStore((s) => s.queue);
-  const currentIndex = usePlayerStore((s) => s.currentIndex);
-  const isPlaying = usePlayerStore((s) => s.isPlaying);
-  const isBuffering = usePlayerStore((s) => s.isBuffering);
-  const repeatMode = usePlayerStore((s) => s.repeatMode);
-  const togglePlay = usePlayerStore((s) => s.togglePlay);
-  const next = usePlayerStore((s) => s.next);
-  const prev = usePlayerStore((s) => s.prev);
-  const cycleRepeat = usePlayerStore((s) => s.cycleRepeat);
-  const toggleQueueSheet = usePlayerStore((s) => s.toggleQueueSheet);
+  const queue = usePlayerStore((s) => s.queue)
+  const currentIndex = usePlayerStore((s) => s.currentIndex)
+  const isPlaying = usePlayerStore((s) => s.isPlaying)
+  const isBuffering = usePlayerStore((s) => s.isBuffering)
+  const repeatMode = usePlayerStore((s) => s.repeatMode)
+  const togglePlay = usePlayerStore((s) => s.togglePlay)
+  const next = usePlayerStore((s) => s.next)
+  const prev = usePlayerStore((s) => s.prev)
+  const cycleRepeat = usePlayerStore((s) => s.cycleRepeat)
+  const toggleQueueSheet = usePlayerStore((s) => s.toggleQueueSheet)
 
-  const navigate = useNavigate();
-  const initFromPersistedState = usePlayerStore((s) => s.initFromPersistedState);
-  const openPlaylistModal = useLibraryStore((s) => s.openPlaylistModal);
+  const navigate = useNavigate()
+  const initFromPersistedState = usePlayerStore((s) => s.initFromPersistedState)
+  const openPlaylistModal = useLibraryStore((s) => s.openPlaylistModal)
+  const downloadSingle = useDownloadStore((s) => s.downloadSingle)
+  const single = useDownloadStore((s) => s.single)
 
   useEffect(() => {
-    initFromPersistedState();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    initFromPersistedState()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const currentTrack = currentIndex >= 0 ? queue[currentIndex] : null;
+  const currentTrack = currentIndex >= 0 ? queue[currentIndex] : null
 
-  const toggleLikedTrack = useLibraryStore((s) => s.toggleLikedTrack);
-  const likedTracks = useLibraryStore((s) => s.likedTracks);
+  const toggleLikedTrack = useLibraryStore((s) => s.toggleLikedTrack)
+  const likedTracks = useLibraryStore((s) => s.likedTracks)
 
   const handleAddToPlaylist = () => {
-    if (!currentTrack) return;
-    openPlaylistModal([currentTrack]);
-  };
+    if (!currentTrack) return
+    openPlaylistModal([currentTrack])
+  }
 
   const handleToggleLike = () => {
-    if (!currentTrack) return;
-    toggleLikedTrack(currentTrack);
-  };
+    if (!currentTrack) return
+    toggleLikedTrack(currentTrack)
+  }
+
+  const handleDownload = () => {
+    if (!currentTrack) return
+    downloadSingle(currentTrack)
+  }
 
   const isLiked = currentTrack
     ? likedTracks.some((t) => t.url === currentTrack.url)
-    : false;
+    : false
 
-  const RepeatIcon = repeatMode === "one" ? Repeat1 : Repeat;
-  const noTrack = !currentTrack;
+  const downloadName = currentTrack?.displayName || currentTrack?.name
+  const isDownloading =
+    single?.status === 'downloading' && single.name === downloadName
+
+  const RepeatIcon = repeatMode === 'one' ? Repeat1 : Repeat
+  const noTrack = !currentTrack
 
   return (
     <div className="border-t border-border bg-panel shrink-0">
@@ -94,7 +107,10 @@ export function PlayerDock() {
         {/* Top: art + meta + utility icons */}
         <div className="flex items-center gap-3">
           <button
-            onClick={() => currentTrack?.artistSlug && navigate(`/artist/${currentTrack.artistSlug}`)}
+            onClick={() =>
+              currentTrack?.artistSlug &&
+              navigate(`/artist/${currentTrack.artistSlug}`)
+            }
             className="flex items-center gap-3 flex-1 min-w-0 text-left focus:outline-none"
             disabled={!currentTrack?.artistSlug}
           >
@@ -129,13 +145,13 @@ export function PlayerDock() {
               disabled={!currentTrack}
               className={`transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${
                 isLiked
-                  ? "text-gold"
-                  : "text-text-muted hover:text-text-secondary"
+                  ? 'text-gold'
+                  : 'text-text-muted hover:text-text-secondary'
               }`}
-              aria-label={isLiked ? "Unlike track" : "Like track"}
-              title={isLiked ? "Unlike" : "Like"}
+              aria-label={isLiked ? 'Unlike track' : 'Like track'}
+              title={isLiked ? 'Unlike' : 'Like'}
             >
-              <Heart size={16} className={isLiked ? "fill-current" : ""} />
+              <Heart size={16} className={isLiked ? 'fill-current' : ''} />
             </button>
             <button
               type="button"
@@ -149,18 +165,32 @@ export function PlayerDock() {
             </button>
             <button
               type="button"
+              onClick={handleDownload}
+              disabled={!currentTrack || isDownloading}
+              className="text-text-muted hover:text-text-secondary disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              aria-label="Download track"
+              title="Download"
+            >
+              {isDownloading ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                <Download size={16} />
+              )}
+            </button>
+            {/* <button
+              type="button"
               className="text-text-muted hover:text-text-secondary transition-colors"
               aria-label="Cast (not available yet)"
               title="Cast"
             >
               <Cast size={16} />
-            </button>
+            </button> */}
             <button
               onClick={toggleQueueSheet}
               className={`transition-colors shrink-0 ${
                 queue.length > 0
-                  ? "text-text-secondary hover:text-text-primary"
-                  : "text-text-muted opacity-50 cursor-not-allowed"
+                  ? 'text-text-secondary hover:text-text-primary'
+                  : 'text-text-muted opacity-50 cursor-not-allowed'
               }`}
               disabled={queue.length === 0}
               title="Queue"
@@ -211,9 +241,9 @@ export function PlayerDock() {
           <button
             onClick={cycleRepeat}
             className={`transition-colors ${
-              repeatMode !== "none"
-                ? "text-gold"
-                : "text-text-muted hover:text-text-secondary"
+              repeatMode !== 'none'
+                ? 'text-gold'
+                : 'text-text-muted hover:text-text-secondary'
             }`}
             title={`Repeat: ${repeatMode}`}
           >
@@ -226,7 +256,10 @@ export function PlayerDock() {
       <div className="hidden md:grid grid-cols-[minmax(200px,1fr)_2fr_minmax(200px,1fr)] items-center gap-4 px-6 h-[88px]">
         {/* Left: art + track info */}
         <button
-          onClick={() => currentTrack?.artistSlug && navigate(`/artist/${currentTrack.artistSlug}`)}
+          onClick={() =>
+            currentTrack?.artistSlug &&
+            navigate(`/artist/${currentTrack.artistSlug}`)
+          }
           className="flex items-center gap-3 min-w-0 text-left focus:outline-none"
           disabled={!currentTrack?.artistSlug}
         >
@@ -296,9 +329,9 @@ export function PlayerDock() {
             <button
               onClick={cycleRepeat}
               className={`transition-colors ${
-                repeatMode !== "none"
-                  ? "text-gold"
-                  : "text-text-muted hover:text-text-secondary"
+                repeatMode !== 'none'
+                  ? 'text-gold'
+                  : 'text-text-muted hover:text-text-secondary'
               }`}
               title={`Repeat: ${repeatMode}`}
             >
@@ -316,13 +349,15 @@ export function PlayerDock() {
               disabled={!currentTrack}
               className={`transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${
                 isLiked
-                  ? "text-gold"
-                  : "text-text-muted hover:text-text-secondary"
+                  ? 'text-gold'
+                  : 'text-text-muted hover:text-text-secondary'
               }`}
-              aria-label={isLiked ? "Unlike track" : "Like track"}
-              title={isLiked ? "Unlike" : "Like"}
+              aria-label={isLiked ? 'Unlike track' : 'Like track'}
+              title={isLiked ? 'Unlike' : 'Like'}
             >
-              <Heart className={`sm:size-4 md:size-5 ${isLiked ? "fill-current" : ""}`} />
+              <Heart
+                className={`sm:size-4 md:size-5 ${isLiked ? 'fill-current' : ''}`}
+              />
             </button>
             <button
               type="button"
@@ -336,18 +371,32 @@ export function PlayerDock() {
             </button>
             <button
               type="button"
+              onClick={handleDownload}
+              disabled={!currentTrack || isDownloading}
+              className="text-text-muted hover:text-text-secondary disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              aria-label="Download track"
+              title="Download"
+            >
+              {isDownloading ? (
+                <Loader2 className="sm:size-4 md:size-5 animate-spin" />
+              ) : (
+                <Download className="sm:size-4 md:size-5" />
+              )}
+            </button>
+            {/* <button
+              type="button"
               className="text-text-muted hover:text-text-secondary transition-colors"
               aria-label="Cast (not available yet)"
               title="Cast"
             >
               <Cast className="sm:size-4 md:size-5" />
-            </button>
+            </button> */}
             <button
               onClick={toggleQueueSheet}
               className={`transition-colors ${
                 queue.length > 0
-                  ? "text-text-secondary hover:text-text-primary"
-                  : "text-text-muted opacity-50 cursor-not-allowed"
+                  ? 'text-text-secondary hover:text-text-primary'
+                  : 'text-text-muted opacity-50 cursor-not-allowed'
               }`}
               disabled={queue.length === 0}
               title="Queue"
@@ -359,5 +408,5 @@ export function PlayerDock() {
         </div>
       </div>
     </div>
-  );
+  )
 }

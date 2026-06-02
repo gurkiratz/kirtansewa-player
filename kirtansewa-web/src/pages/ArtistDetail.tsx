@@ -46,7 +46,9 @@ export function ArtistDetail() {
   const [bioExpanded, setBioExpanded] = useState(false);
   const [isShuffled, setIsShuffled] = useState(false);
   const [selectMode, setSelectMode] = useState(false);
-  const [selectedUrls, setSelectedUrls] = useState<Set<string>>(new Set());
+  // Selection is keyed by track INDEX (not URL) so that identical-URL duplicate
+  // tracks are each individually selectable and the count stays accurate.
+  const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
   const [glowVisible, setGlowVisible] = useState(false);
   const glowTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -70,7 +72,7 @@ export function ArtistDetail() {
     setBioExpanded(false);
     setIsShuffled(false);
     setSelectMode(false);
-    setSelectedUrls(new Set());
+    setSelectedIndices(new Set());
 
     const artistIndex = artists.findIndex((a) => a.slug === slug);
     if (artistIndex === -1) {
@@ -138,32 +140,44 @@ export function ArtistDetail() {
 
   const enterSelectMode = () => {
     setSelectMode(true);
-    setSelectedUrls(new Set());
+    setSelectedIndices(new Set());
   };
 
   const exitSelectMode = () => {
     setSelectMode(false);
-    setSelectedUrls(new Set());
+    setSelectedIndices(new Set());
   };
 
-  const toggleSelect = (url: string) => {
-    setSelectedUrls((prev) => {
+  const toggleSelect = (index: number) => {
+    setSelectedIndices((prev) => {
       const next = new Set(prev);
-      if (next.has(url)) next.delete(url);
-      else if (next.size < MAX_SELECT) next.add(url);
+      if (next.has(index)) next.delete(index);
+      else if (next.size < MAX_SELECT) next.add(index);
       return next;
     });
   };
 
   const selectFirst50 = () => {
-    setSelectedUrls(new Set(allTracks.slice(0, MAX_SELECT).map((t) => t.url)));
+    const n = Math.min(MAX_SELECT, allTracks.length);
+    setSelectedIndices(new Set(Array.from({ length: n }, (_, i) => i)));
   };
 
-  const clearSelect = () => setSelectedUrls(new Set());
+  // Advance the 50-track window past the highest currently-selected track
+  // (51–100, then 101–150, …). Wraps back to the start after the last batch.
+  const selectNext50 = () => {
+    setSelectedIndices((prev) => {
+      const anchor = prev.size ? Math.max(...prev) : -1;
+      const start = anchor + 1 >= allTracks.length ? 0 : anchor + 1;
+      const end = Math.min(start + MAX_SELECT, allTracks.length);
+      return new Set(Array.from({ length: end - start }, (_, k) => start + k));
+    });
+  };
+
+  const clearSelect = () => setSelectedIndices(new Set());
 
   const downloadSelected = () => {
     if (!detail) return;
-    const chosen = allTracks.filter((t) => selectedUrls.has(t.url));
+    const chosen = allTracks.filter((_, i) => selectedIndices.has(i));
     if (chosen.length === 0) return;
     downloadZip(chosen, detail.name, `${slug ?? "kirtan"}-${chosen.length}-tracks.zip`);
     exitSelectMode();
@@ -171,9 +185,10 @@ export function ArtistDetail() {
 
   const selectProps = {
     selectMode,
-    selectedUrls,
+    selectedIndices,
     onToggleSelect: toggleSelect,
     onSelectAll: selectFirst50,
+    onSelectNext: selectNext50,
     onClearSelect: clearSelect,
     onExitSelectMode: exitSelectMode,
     onDownloadSelected: downloadSelected,
@@ -376,10 +391,11 @@ export function ArtistDetail() {
 
 interface SelectProps {
   selectMode: boolean;
-  selectedUrls: Set<string>;
+  selectedIndices: Set<number>;
   selectableCount: number;
-  onToggleSelect: (url: string) => void;
+  onToggleSelect: (index: number) => void;
   onSelectAll: () => void;
+  onSelectNext: () => void;
   onClearSelect: () => void;
   onExitSelectMode: () => void;
   onDownloadSelected: () => void;
@@ -389,10 +405,11 @@ function TrackSection({
   detail,
   meta,
   selectMode,
-  selectedUrls,
+  selectedIndices,
   selectableCount,
   onToggleSelect,
   onSelectAll,
+  onSelectNext,
   onClearSelect,
   onExitSelectMode,
   onDownloadSelected,
@@ -433,7 +450,7 @@ function TrackSection({
     }
   };
 
-  const selectedCount = selectedUrls.size;
+  const selectedCount = selectedIndices.size;
   const allSelected = selectedCount > 0 && selectedCount >= selectableCount;
   const atMax = selectedCount >= MAX_SELECT;
 
@@ -460,6 +477,15 @@ function TrackSection({
           >
             {allSelected ? "Clear" : "Select all"}
           </button>
+          {allTracks.length > MAX_SELECT && (
+            <button
+              onClick={onSelectNext}
+              className="text-xs text-text-secondary hover:text-text-primary transition-colors px-2 py-1.5"
+              title="Select the next 50 tracks"
+            >
+              Next 50
+            </button>
+          )}
           <button
             onClick={onDownloadSelected}
             disabled={selectedCount === 0}
@@ -518,7 +544,7 @@ function TrackSection({
         )}
         {visibleTracks.map(({ track, i }) => {
           const isActive = i === activeIndex;
-          const isSelected = selectedUrls.has(track.url);
+          const isSelected = selectedIndices.has(i);
           const selectDisabled = selectMode && !isSelected && atMax;
           return (
             <div
@@ -536,7 +562,7 @@ function TrackSection({
             >
               <button
                 onClick={() =>
-                  selectMode ? onToggleSelect(track.url) : handleTrackClick(i)
+                  selectMode ? onToggleSelect(i) : handleTrackClick(i)
                 }
                 disabled={selectDisabled}
                 className={`flex-1 min-w-0 flex items-center gap-3 h-full text-left ${

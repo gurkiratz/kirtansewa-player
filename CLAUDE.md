@@ -34,6 +34,8 @@ python scrape_details.py    # rebuild artists/ directory of per-artist JSONs
 3. Both JSON outputs are copied to `kirtansewa-web/public/artists/` so Vite serves them statically
 4. The app fetches a manifest at runtime to discover available artists
 
+**Audio hosting**: track audio files are served from S3 over HTTPS with CORS already enabled. No need to re-verify CORS/HTTPS for the media URLs.
+
 ### Frontend (`kirtansewa-web/src/`)
 
 - **Routing**: React Router v7 — `App.tsx` defines routes; pages live in `pages/`
@@ -60,3 +62,7 @@ python scrape_details.py    # rebuild artists/ directory of per-artist JSONs
 | Icons       | lucide-react, @icons-pack/react-simple-icons |
 | Drag & drop | @dnd-kit/core + sortable                     |
 | Scraper     | Python 3, requests, BeautifulSoup4           |
+
+## After committing
+
+After a commit, see if we need to update CHANGELOG.md. Then update it
