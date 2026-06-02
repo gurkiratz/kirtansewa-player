@@ -81,6 +81,7 @@ The project has two halves: a Python data pipeline and a React single page app.
 - The app fetches a manifest at runtime to discover available artists, then loads each artist's JSON on demand.
 - State is split across small stores: one for the player and queue, one for the user's library, and one for loaded data.
 - Audio is handled by the browser's native audio element. The UI is built with Vite, React 19, Tailwind v4.
+- I chose Vite and React over a framework like Next.js on purpose. The app is a lightweight, fully client-side SPA with no need for server-side rendering, and a plain Vite build ships to Vercel as static assets, which keeps deployments very fast.
 
 > 📷 **Screenshot:** Architecture diagram (data pipeline to static JSON to React app)
 
