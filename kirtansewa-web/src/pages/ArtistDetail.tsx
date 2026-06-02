@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -6,16 +7,22 @@ import {
   Shuffle,
   Heart,
   MoreHorizontal,
+  MoreVertical,
   ListPlus,
   Search,
   X,
+  Download,
+  Check,
 } from "lucide-react";
-import type { ArtistDetail as ArtistDetailType } from "../types";
+import type { ArtistDetail as ArtistDetailType, Track } from "../types";
 import { toTrack, type TrackMeta } from "../types";
 import { ArtistImage } from "../components/ArtistImage";
 import { usePlayerStore } from "../store/playerStore";
 import { useDataStore } from "../store/dataStore";
 import { useLibraryStore } from "../store/libraryStore";
+import { useDownloadStore } from "../store/downloadStore";
+
+const MAX_SELECT = 50;
 
 export function ArtistDetail() {
   const { slug } = useParams<{ slug: string }>();
@@ -31,12 +38,15 @@ export function ArtistDetail() {
   const favoriteArtists = useLibraryStore((s) => s.favoriteArtists);
   const toggleFavoriteArtist = useLibraryStore((s) => s.toggleFavoriteArtist);
   const openPlaylistModal = useLibraryStore((s) => s.openPlaylistModal);
+  const downloadZip = useDownloadStore((s) => s.downloadZip);
 
   const [detail, setDetail] = useState<ArtistDetailType | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [bioExpanded, setBioExpanded] = useState(false);
   const [isShuffled, setIsShuffled] = useState(false);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedUrls, setSelectedUrls] = useState<Set<string>>(new Set());
   const [glowVisible, setGlowVisible] = useState(false);
   const glowTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -59,6 +69,8 @@ export function ArtistDetail() {
     setError(false);
     setBioExpanded(false);
     setIsShuffled(false);
+    setSelectMode(false);
+    setSelectedUrls(new Set());
 
     const artistIndex = artists.findIndex((a) => a.slug === slug);
     if (artistIndex === -1) {
@@ -118,6 +130,54 @@ export function ArtistDetail() {
       playTrack(0);
       setIsShuffled(false);
     }
+  };
+
+  const allTracks: Track[] = detail
+    ? detail.tracks.map((r) => toTrack(r, meta))
+    : [];
+
+  const enterSelectMode = () => {
+    setSelectMode(true);
+    setSelectedUrls(new Set());
+  };
+
+  const exitSelectMode = () => {
+    setSelectMode(false);
+    setSelectedUrls(new Set());
+  };
+
+  const toggleSelect = (url: string) => {
+    setSelectedUrls((prev) => {
+      const next = new Set(prev);
+      if (next.has(url)) next.delete(url);
+      else if (next.size < MAX_SELECT) next.add(url);
+      return next;
+    });
+  };
+
+  const selectFirst50 = () => {
+    setSelectedUrls(new Set(allTracks.slice(0, MAX_SELECT).map((t) => t.url)));
+  };
+
+  const clearSelect = () => setSelectedUrls(new Set());
+
+  const downloadSelected = () => {
+    if (!detail) return;
+    const chosen = allTracks.filter((t) => selectedUrls.has(t.url));
+    if (chosen.length === 0) return;
+    downloadZip(chosen, detail.name, `${slug ?? "kirtan"}-${chosen.length}-tracks.zip`);
+    exitSelectMode();
+  };
+
+  const selectProps = {
+    selectMode,
+    selectedUrls,
+    onToggleSelect: toggleSelect,
+    onSelectAll: selectFirst50,
+    onClearSelect: clearSelect,
+    onExitSelectMode: exitSelectMode,
+    onDownloadSelected: downloadSelected,
+    selectableCount: Math.min(MAX_SELECT, allTracks.length),
   };
 
   if (loading) {
@@ -248,6 +308,18 @@ export function ArtistDetail() {
               <Heart size={16} className={isFavorite ? "fill-current" : ""} />
             </button>
             <button
+              onClick={() => (selectMode ? exitSelectMode() : enterSelectMode())}
+              className={`w-9 h-9 rounded-full border flex items-center justify-center transition-colors ${
+                selectMode
+                  ? "border-gold bg-gold/15 text-gold"
+                  : "border-border text-text-secondary hover:text-text-primary hover:border-text-secondary"
+              }`}
+              aria-label="Select tracks to download"
+              title="Download tracks"
+            >
+              <Download size={16} />
+            </button>
+            <button
               onClick={handleAddAll}
               className="w-9 h-9 rounded-full border border-border flex items-center justify-center text-text-secondary hover:text-text-primary hover:border-text-secondary transition-colors hidden"
               title="Add all to queue"
@@ -290,30 +362,50 @@ export function ArtistDetail() {
 
         {/* On mobile, render tracks inline below the info */}
         <div className="md:hidden border-t border-border">
-          <TrackSection detail={detail} meta={meta} />
+          <TrackSection detail={detail} meta={meta} {...selectProps} />
         </div>
       </div>
 
       {/* ── MIDDLE: TRACKS (desktop only) ── */}
       <div className="relative z-10 hidden md:flex flex-1 flex-col overflow-hidden">
-        <TrackSection detail={detail} meta={meta} />
+        <TrackSection detail={detail} meta={meta} {...selectProps} />
       </div>
     </div>
   );
 }
 
+interface SelectProps {
+  selectMode: boolean;
+  selectedUrls: Set<string>;
+  selectableCount: number;
+  onToggleSelect: (url: string) => void;
+  onSelectAll: () => void;
+  onClearSelect: () => void;
+  onExitSelectMode: () => void;
+  onDownloadSelected: () => void;
+}
+
 function TrackSection({
   detail,
   meta,
+  selectMode,
+  selectedUrls,
+  selectableCount,
+  onToggleSelect,
+  onSelectAll,
+  onClearSelect,
+  onExitSelectMode,
+  onDownloadSelected,
 }: {
   detail: ArtistDetailType;
   meta?: TrackMeta;
-}) {
+} & SelectProps) {
   const clearQueue = usePlayerStore((s) => s.clearQueue);
   const addToQueue = usePlayerStore((s) => s.addToQueue);
   const playTrack = usePlayerStore((s) => s.playTrack);
   const queue = usePlayerStore((s) => s.queue);
   const currentIndex = usePlayerStore((s) => s.currentIndex);
+  const downloadSingle = useDownloadStore((s) => s.downloadSingle);
 
   const [query, setQuery] = useState("");
 
@@ -341,6 +433,10 @@ function TrackSection({
     }
   };
 
+  const selectedCount = selectedUrls.size;
+  const allSelected = selectedCount > 0 && selectedCount >= selectableCount;
+  const atMax = selectedCount >= MAX_SELECT;
+
   const q = query.trim().toLowerCase();
   const visibleTracks = q
     ? allTracks
@@ -350,6 +446,38 @@ function TrackSection({
 
   return (
     <>
+      {/* Selection toolbar (download mode) */}
+      {selectMode && (
+        <div className="flex items-center gap-2 px-5 py-2.5 border-b border-border bg-gold/5">
+          <span className="text-[13px] text-text-primary font-medium tabular-nums">
+            {selectedCount} selected
+          </span>
+          <span className="text-[11px] text-text-muted">max {MAX_SELECT}</span>
+          <div className="flex-1" />
+          <button
+            onClick={allSelected ? onClearSelect : onSelectAll}
+            className="text-xs text-text-secondary hover:text-text-primary transition-colors px-2 py-1.5"
+          >
+            {allSelected ? "Clear" : "Select all"}
+          </button>
+          <button
+            onClick={onDownloadSelected}
+            disabled={selectedCount === 0}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gold text-surface text-xs font-medium hover:bg-gold/85 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            <Download size={13} />
+            Download
+          </button>
+          <button
+            onClick={onExitSelectMode}
+            className="text-text-muted hover:text-text-primary transition-colors p-1"
+            aria-label="Exit selection"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
       {/* Search */}
       <div className="px-5 pt-3 pb-2 border-b border-border/50">
         <div className="relative">
@@ -390,44 +518,160 @@ function TrackSection({
         )}
         {visibleTracks.map(({ track, i }) => {
           const isActive = i === activeIndex;
+          const isSelected = selectedUrls.has(track.url);
+          const selectDisabled = selectMode && !isSelected && atMax;
           return (
-            <button
+            <div
               key={i}
-              onClick={() => handleTrackClick(i)}
               className={`
-                w-full flex items-center gap-3 px-5 h-14 transition-colors group text-left cursor-pointer
+                w-full flex items-center gap-3 px-5 h-14 transition-colors group
                 ${
-                  isActive
-                    ? "bg-gold/15 border-l-4 border-l-gold"
-                    : "border-b border-border/50 hover:bg-white/5 active:bg-white/5"
+                  selectMode && isSelected
+                    ? "bg-gold/10 border-b border-border/50"
+                    : isActive && !selectMode
+                      ? "bg-gold/15 border-l-4 border-l-gold"
+                      : "border-b border-border/50 hover:bg-white/5"
                 }
               `}
             >
-              <span
-                className={`text-sm w-8 text-center shrink-0 ${
-                  isActive ? "text-gold" : "text-text-primary/50"
+              <button
+                onClick={() =>
+                  selectMode ? onToggleSelect(track.url) : handleTrackClick(i)
+                }
+                disabled={selectDisabled}
+                className={`flex-1 min-w-0 flex items-center gap-3 h-full text-left ${
+                  selectDisabled ? "cursor-not-allowed opacity-40" : "cursor-pointer"
                 }`}
               >
-                {i + 1}
-              </span>
-              <div className="flex-1 min-w-0">
-                <p
-                  className={`text-[13px] font-medium truncate leading-tight ${
-                    isActive ? "text-gold" : "text-text-primary"
-                  }`}
-                >
-                  {track.displayName}
-                </p>
-                {track.artistLabel && (
-                  <p className="text-[11px] text-text-secondary truncate leading-tight mt-0.5">
-                    {track.artistLabel}
-                  </p>
+                {selectMode ? (
+                  <span className="w-8 flex items-center justify-center shrink-0">
+                    <span
+                      className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${
+                        isSelected
+                          ? "bg-gold border-gold text-surface"
+                          : "border-text-muted"
+                      }`}
+                    >
+                      {isSelected && <Check size={13} strokeWidth={3} />}
+                    </span>
+                  </span>
+                ) : (
+                  <span
+                    className={`text-sm w-8 text-center shrink-0 ${
+                      isActive ? "text-gold" : "text-text-primary/50"
+                    }`}
+                  >
+                    {i + 1}
+                  </span>
                 )}
-              </div>
-            </button>
+                <div className="flex-1 min-w-0">
+                  <p
+                    className={`text-[13px] font-medium truncate leading-tight ${
+                      isActive && !selectMode ? "text-gold" : "text-text-primary"
+                    }`}
+                  >
+                    {track.displayName}
+                  </p>
+                  {track.artistLabel && (
+                    <p className="text-[11px] text-text-secondary truncate leading-tight mt-0.5">
+                      {track.artistLabel}
+                    </p>
+                  )}
+                </div>
+              </button>
+              {!selectMode && (
+                <RowMenu onDownload={() => downloadSingle(track)} />
+              )}
+            </div>
           );
         })}
       </div>
+    </>
+  );
+}
+
+function RowMenu({ onDownload }: { onDownload: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+
+  const close = useCallback(() => setOpen(false), []);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+    };
+    window.addEventListener("keydown", onKey);
+    // Close on any scroll so the fixed popover never detaches from its button.
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, [open, close]);
+
+  const toggle = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (open) {
+      setOpen(false);
+      return;
+    }
+    const r = btnRef.current?.getBoundingClientRect();
+    if (!r) return;
+    const MENU_W = 176;
+    const MENU_H = 48;
+    const placeAbove = window.innerHeight - r.bottom < MENU_H + 12;
+    setPos({
+      top: placeAbove ? r.top - MENU_H - 4 : r.bottom + 4,
+      left: Math.max(8, r.right - MENU_W),
+    });
+    setOpen(true);
+  };
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        onClick={toggle}
+        className={`shrink-0 p-1.5 -mr-1.5 rounded-full transition-colors opacity-100 md:opacity-0 md:group-hover:opacity-100 focus:opacity-100 ${
+          open
+            ? "text-text-primary bg-white/10 md:opacity-100"
+            : "text-text-muted hover:text-text-primary hover:bg-white/10"
+        }`}
+        aria-label="Track options"
+        aria-haspopup="menu"
+        aria-expanded={open}
+      >
+        <MoreVertical size={16} />
+      </button>
+      {open &&
+        pos &&
+        createPortal(
+          <>
+            <div className="fixed inset-0 z-60" onClick={() => setOpen(false)} />
+            <div
+              role="menu"
+              style={{ top: pos.top, left: pos.left }}
+              className="fixed z-61 w-44 bg-card border border-border rounded-lg shadow-2xl py-1 animate-in"
+            >
+              <button
+                role="menuitem"
+                onClick={() => {
+                  setOpen(false);
+                  onDownload();
+                }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-left text-[13px] text-text-primary hover:bg-white/5 transition-colors"
+              >
+                <Download size={15} className="text-text-secondary" />
+                Download
+              </button>
+            </div>
+          </>,
+          document.body,
+        )}
     </>
   );
 }
