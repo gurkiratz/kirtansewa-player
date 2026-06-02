@@ -14,6 +14,14 @@ def get_slug(url):
     return path.split("/")[-1]
 
 
+def to_https(url):
+    # The CDN serves everything over HTTPS; upgrade scraped http:// links so the
+    # app (served over HTTPS) can fetch them without mixed-content blocking.
+    if url and url.startswith("http://"):
+        return "https://" + url[len("http://"):]
+    return url
+
+
 def scrape_artist(url):
     resp = requests.get(url)
     resp.raise_for_status()
@@ -38,6 +46,7 @@ def scrape_artist(url):
                 image_url = srcset.split(",")[0].strip().split(" ")[0]
             else:
                 image_url = img.get("src") or None
+            image_url = to_https(image_url)
 
     # Body paragraphs (plain text, skip mp3-only paragraphs)
     body = []
@@ -71,7 +80,7 @@ def scrape_artist(url):
             if a["href"].endswith(".mp3"):
                 tracks.append({
                     "name": a.get_text(strip=True),
-                    "url": a["href"],
+                    "url": to_https(a["href"]),
                 })
 
     return {
