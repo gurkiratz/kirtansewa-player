@@ -268,7 +268,7 @@ export function ArtistDetail() {
 
   return (
     // Mobile: vertical scroll. Desktop: horizontal flex with independent panel scrolls.
-    <div className="relative flex-1 flex flex-col md:flex-row overflow-y-auto md:overflow-hidden">
+    <div className="relative flex-1 flex flex-col md:flex-row md:overflow-hidden">
       {/* Blurred album art background glow — spans entire page */}
       {detail.image_url && (
         <div
@@ -487,6 +487,22 @@ function TrackSection({
     ? allTracks.findIndex((t) => t.url === currentTrackUrl)
     : -1;
 
+  // Bring the playing track into view when it isn't already — landing here
+  // from a search suggestion can put it hundreds of rows down. A track the user
+  // clicked themselves is on screen, so this is a no-op for them.
+  const activeRowRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (activeIndex < 0) return;
+    const el = activeRowRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    // A hidden copy of this panel (the other breakpoint) measures all zeros.
+    if (rect.height === 0) return;
+    const fullyVisible = rect.top >= 0 && rect.bottom <= window.innerHeight;
+    if (fullyVisible) return;
+    el.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [activeIndex]);
+
   const handleTrackClick = (index: number) => {
     if (isThisArtistQueue) {
       const clickedUrl = allTracks[index].url;
@@ -598,6 +614,7 @@ function TrackSection({
           return (
             <div
               key={i}
+              ref={isActive ? activeRowRef : undefined}
               className={`
                 w-full flex items-center gap-3 px-5 h-14 transition-colors group
                 ${

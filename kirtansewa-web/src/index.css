@@ -16,10 +16,19 @@
   box-sizing: border-box;
 }
 
-html,
+html {
+  height: 100%;
+}
+
+/*
+ * body/#root grow with their content so the DOCUMENT is the scroller on mobile.
+ * iOS only honours the status-bar tap-to-scroll-to-top gesture on the main
+ * frame, never on a nested overflow container. Desktop pins the app shell to
+ * the viewport itself (see AppLayout's md:h-dvh).
+ */
 body,
 #root {
-  height: 100%;
+  min-height: 100%;
   margin: 0;
   padding: 0;
   background-color: #111111;

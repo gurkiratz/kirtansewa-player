@@ -12,7 +12,7 @@ interface Props {
  */
 export function AppHeader({ onMenuOpen }: Props) {
   return (
-    <header className="h-14 shrink-0 border-b border-border bg-surface flex items-center gap-2 md:gap-4 px-2 md:px-5 z-30">
+    <header className="sticky top-0 md:static h-14 shrink-0 border-b border-border bg-surface flex items-center gap-2 md:gap-4 px-2 md:px-5 z-30">
       <button
         onClick={onMenuOpen}
         className="md:hidden text-text-secondary hover:text-text-primary transition-colors shrink-0"

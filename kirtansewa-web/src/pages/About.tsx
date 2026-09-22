@@ -1,6 +1,6 @@
 export function About() {
   return (
-    <div className="flex-1 overflow-y-auto">
+    <div className="flex-1 md:overflow-y-auto">
       <div className="max-w-lg mx-auto px-5 py-10">
         <h1 className="text-text-primary text-xl font-semibold mb-4">
           About Kirtan Sewa

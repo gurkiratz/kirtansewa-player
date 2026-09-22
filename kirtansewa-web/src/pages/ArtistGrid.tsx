@@ -1,9 +1,10 @@
-import { useState, useMemo, useEffect, useRef, useLayoutEffect } from "react";
+import { useState, useMemo, useEffect, useRef, useLayoutEffect, useCallback } from "react";
 import { useNavigationType } from "react-router-dom";
 import { ArrowUpDown } from "lucide-react";
 import { useDataStore } from "../store/dataStore";
 import { useLibraryStore } from "../store/libraryStore";
 import { ViewToggle } from "../components/ui/ViewToggle";
+import { DESKTOP_QUERY, useMediaQuery } from "../hooks/useMediaQuery";
 import { useViewMode } from "../hooks/useViewMode";
 import {
   ArtistGridView,
@@ -61,6 +62,15 @@ export function ArtistGrid() {
     });
   }, [artists, favoriteArtists, sortBy]);
 
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Mobile scrolls the document; desktop scrolls this panel.
+  const isDesktop = useMediaQuery(DESKTOP_QUERY);
+  const readScrollTop = useCallback(
+    () => (isDesktop ? scrollRef.current?.scrollTop ?? 0 : window.scrollY),
+    [isDesktop]
+  );
+
   const navigationType = useNavigationType();
   const shouldRestoreRef = useRef(navigationType === "POP");
   const savedScrollRef = useRef<SavedScroll | null>(
@@ -70,7 +80,6 @@ export function ArtistGrid() {
     () => savedScrollRef.current?.visibleCount ?? PAGE_SIZE
   );
   const [restored, setRestored] = useState(() => !savedScrollRef.current);
-  const scrollRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const didRestoreScrollRef = useRef(false);
   const latestScrollTopRef = useRef(savedScrollRef.current?.scrollTop ?? 0);
@@ -86,25 +95,28 @@ export function ArtistGrid() {
     if (didRestoreScrollRef.current) return;
     if (loading) return;
     const saved = savedScrollRef.current;
-    const root = scrollRef.current;
-    if (saved && root) {
-      root.scrollTop = saved.scrollTop;
+    if (saved) {
+      if (isDesktop) {
+        if (scrollRef.current) scrollRef.current.scrollTop = saved.scrollTop;
+      } else {
+        window.scrollTo(0, saved.scrollTop);
+      }
       latestScrollTopRef.current = saved.scrollTop;
     }
     didRestoreScrollRef.current = true;
     setRestored(true);
-  }, [loading]);
+  }, [loading, isDesktop]);
 
   // Track latest scroll position via scroll event (refs survive unmount).
   useEffect(() => {
-    const root = scrollRef.current;
-    if (!root) return;
+    const target: HTMLElement | Window | null = isDesktop ? scrollRef.current : window;
+    if (!target) return;
     const onScroll = () => {
-      latestScrollTopRef.current = root.scrollTop;
+      latestScrollTopRef.current = readScrollTop();
     };
-    root.addEventListener("scroll", onScroll, { passive: true });
-    return () => root.removeEventListener("scroll", onScroll);
-  }, [loading]);
+    target.addEventListener("scroll", onScroll, { passive: true });
+    return () => target.removeEventListener("scroll", onScroll);
+  }, [loading, isDesktop, readScrollTop]);
 
   // Persist on unmount and on pagehide using refs (DOM may be detached at cleanup).
   useEffect(() => {
@@ -128,8 +140,10 @@ export function ArtistGrid() {
 
   useEffect(() => {
     const el = sentinelRef.current;
-    const root = scrollRef.current;
-    if (!el || !root || visibleCount >= sorted.length) return;
+    if (!el || visibleCount >= sorted.length) return;
+    // A null root means the viewport, which is the scroller on mobile.
+    const root = isDesktop ? scrollRef.current : null;
+    if (isDesktop && !root) return;
     const obs = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting) {
@@ -140,7 +154,7 @@ export function ArtistGrid() {
     );
     obs.observe(el);
     return () => obs.disconnect();
-  }, [visibleCount, sorted.length]);
+  }, [visibleCount, sorted.length, isDesktop]);
 
   const visible = sorted.slice(0, visibleCount);
   const favoriteSet = useMemo(() => new Set(favoriteArtists), [favoriteArtists]);
@@ -164,11 +178,11 @@ export function ArtistGrid() {
   return (
     <div
       ref={scrollRef}
-      className="flex-1 overflow-y-auto"
+      className="flex-1 md:overflow-y-auto"
       style={{ visibility: restored ? "visible" : "hidden" }}
     >
       {/* Toolbar */}
-      <div className="sticky top-0 z-10 bg-surface border-b border-border px-4 md:px-5 py-2.5 flex items-center gap-6">
+      <div className="sticky top-14 md:top-0 z-10 bg-surface border-b border-border px-4 md:px-5 py-2.5 flex items-center gap-6">
         <button
           onClick={toggleSort}
           className={`flex items-center gap-1.5 text-xs transition-colors ${

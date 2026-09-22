@@ -10,6 +10,7 @@ import { usePlayerStore } from '../store/playerStore';
 import { toTrack, type Artist, type Track } from '../types';
 import { SegmentedTabs } from '../components/ui/SegmentedTabs';
 import { ViewToggle } from '../components/ui/ViewToggle';
+import { DESKTOP_QUERY, useMediaQuery } from '../hooks/useMediaQuery';
 import { useViewMode } from '../hooks/useViewMode';
 import { ArtistGridView, ArtistListView } from '../components/artists/ArtistViews';
 import { ArtistCard } from '../components/ArtistCard';
@@ -42,6 +43,8 @@ export function SearchResults({ query }: { query: string }) {
   const [visibleGroups, setVisibleGroups] = useState(GROUP_PAGE);
   const scrollRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
+  // Mobile scrolls the document; desktop scrolls this panel.
+  const isDesktop = useMediaQuery(DESKTOP_QUERY);
 
   // Reset paging during render when the query or tab changes — an effect would
   // render one frame of the old list first.
@@ -53,13 +56,16 @@ export function SearchResults({ query }: { query: string }) {
   }
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: 0 });
-  }, [resetKey]);
+    if (isDesktop) scrollRef.current?.scrollTo({ top: 0 });
+    else window.scrollTo({ top: 0 });
+  }, [resetKey, isDesktop]);
 
   useEffect(() => {
     const el = sentinelRef.current;
-    const root = scrollRef.current;
-    if (!el || !root || visibleGroups >= result.groups.length) return;
+    if (!el || visibleGroups >= result.groups.length) return;
+    // A null root means the viewport, which is the scroller on mobile.
+    const root = isDesktop ? scrollRef.current : null;
+    if (isDesktop && !root) return;
     const obs = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting) {
@@ -70,7 +76,7 @@ export function SearchResults({ query }: { query: string }) {
     );
     obs.observe(el);
     return () => obs.disconnect();
-  }, [visibleGroups, result.groups.length]);
+  }, [visibleGroups, result.groups.length, isDesktop]);
 
   // The artists tab renders the same cards/rows as the home grid, so map the
   // index hits back onto the catalog's Artist records.
@@ -87,8 +93,8 @@ export function SearchResults({ query }: { query: string }) {
   const tooShort = normalize(query).length < MIN_QUERY_LENGTH;
 
   return (
-    <div ref={scrollRef} className="flex-1 overflow-y-auto">
-      <div className="sticky top-0 z-20 bg-surface border-b border-border px-4 md:px-5 py-2.5 flex items-center gap-3 md:gap-6">
+    <div ref={scrollRef} className="flex-1 md:overflow-y-auto">
+      <div className="sticky top-14 md:top-0 z-20 bg-surface border-b border-border px-4 md:px-5 py-2.5 flex items-center gap-3 md:gap-6">
         <SegmentedTabs
           ariaLabel="Search result type"
           items={[

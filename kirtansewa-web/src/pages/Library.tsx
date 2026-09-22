@@ -30,7 +30,7 @@ export function LibraryPage() {
   };
 
   return (
-    <div className="flex-1 flex flex-col overflow-y-auto">
+    <div className="flex-1 flex flex-col md:overflow-y-auto">
       <div className="px-5 pt-5 pb-0">
         <h1 className="text-text-primary text-xl font-semibold mb-5">
           Your Library

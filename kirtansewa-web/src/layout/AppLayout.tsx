@@ -188,8 +188,25 @@ export function AppLayout() {
 
   const closeMobileMenu = useCallback(() => setMobileMenuOpen(false), []);
 
+  // On mobile the dock is fixed to the viewport, so its height has to be
+  // reserved in the document flow or it covers the last rows of every page.
+  const dockRef = useRef<HTMLDivElement>(null);
+  const [dockHeight, setDockHeight] = useState(0);
+
+  useEffect(() => {
+    const el = dockRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(([entry]) => {
+      setDockHeight(entry.contentRect.height);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   return (
-    <div className="h-full flex flex-col md:flex-row bg-surface overflow-hidden">
+    // Mobile: the document scrolls, so nothing here clips or fixes the height.
+    // Desktop: the shell fills the viewport and each panel scrolls on its own.
+    <div className="min-h-dvh md:h-dvh flex flex-col md:flex-row bg-surface md:overflow-hidden">
       {/* Desktop sidebar */}
       <DesktopSidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
 
@@ -197,14 +214,25 @@ export function AppLayout() {
       <MobileNavDrawer open={mobileMenuOpen} onClose={closeMobileMenu} />
 
       {/* Main column */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 md:overflow-hidden">
         <AppHeader onMenuOpen={() => setMobileMenuOpen(true)} />
 
-        <main className="flex-1 flex overflow-hidden">
+        <main className="flex-1 flex md:overflow-hidden">
           <Outlet />
         </main>
 
-        <PlayerDock />
+        {/* Spacer standing in for the fixed dock (mobile only). */}
+        <div
+          className="md:hidden shrink-0"
+          style={{ height: dockHeight }}
+          aria-hidden
+        />
+        <div
+          ref={dockRef}
+          className="fixed inset-x-0 bottom-0 z-20 md:static md:z-auto"
+        >
+          <PlayerDock />
+        </div>
         <QueueSheet />
       </div>
 

@@ -2,6 +2,11 @@
 
 All notable changes to the Kirtansewa catalog and player. Tags: **[Web]** = React app · **[Scraper]** = Python pipeline.
 
+## 2026-09-23
+
+- **[Web]** The page itself now scrolls on mobile instead of a nested container. iOS only honours the tap-the-status-bar gesture on the main frame, so scroll-to-top did nothing before. The header is sticky, the player dock is fixed with its height reserved in the flow, and each page keeps its own scroller from `md` up.
+- **[Web]** The artist page scrolls the playing track into view when it isn't already visible — arriving from a search suggestion could otherwise leave it hundreds of rows down.
+
 ## 2026-09-22
 
 - **[Web]** Catalog-wide search over all 23,239 tracks and 222 artists, replacing the old in-place artist-name filter.
