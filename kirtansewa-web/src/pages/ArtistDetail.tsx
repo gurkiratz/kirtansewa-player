@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
   Play,
@@ -27,7 +27,9 @@ const MAX_SELECT = 50;
 export function ArtistDetail() {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const artists = useDataStore((s) => s.artists);
+  const loadArtistDetail = useDataStore((s) => s.loadArtistDetail);
   const addToQueue = usePlayerStore((s) => s.addToQueue);
   const clearQueue = usePlayerStore((s) => s.clearQueue);
   const replaceQueue = usePlayerStore((s) => s.replaceQueue);
@@ -40,7 +42,15 @@ export function ArtistDetail() {
   const openPlaylistModal = useLibraryStore((s) => s.openPlaylistModal);
   const downloadZip = useDownloadStore((s) => s.downloadZip);
 
-  const [detail, setDetail] = useState<ArtistDetailType | null>(null);
+  // Navigating between two artists reuses this component (same route element),
+  // so the previous artist's detail stays in state while the next one loads.
+  // Pairing it with its slug means `detail` is null whenever it doesn't belong
+  // to the artist in the URL — nothing downstream can act on the wrong artist.
+  const [loadedDetail, setLoadedDetail] = useState<{
+    slug: string;
+    data: ArtistDetailType;
+  } | null>(null);
+  const detail = loadedDetail && loadedDetail.slug === slug ? loadedDetail.data : null;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [bioExpanded, setBioExpanded] = useState(false);
@@ -49,6 +59,7 @@ export function ArtistDetail() {
   // Selection is keyed by track INDEX (not URL) so that identical-URL duplicate
   // tracks are each individually selectable and the count stays accurate.
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
+  const [trackQuery, setTrackQuery] = useState("");
   const [glowVisible, setGlowVisible] = useState(false);
   const glowTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -71,35 +82,67 @@ export function ArtistDetail() {
     setError(false);
     setBioExpanded(false);
     setIsShuffled(false);
+    setTrackQuery("");
     setSelectMode(false);
     setSelectedIndices(new Set());
 
-    const artistIndex = artists.findIndex((a) => a.slug === slug);
-    if (artistIndex === -1) {
-      setError(true);
-      setLoading(false);
-      return;
-    }
+    // The catalog resolves a slug to its detail filename, so wait for it.
+    if (artists.length === 0) return;
 
-    const filename = `${String(artistIndex + 1).padStart(2, "0")}-${slug}.json`;
-    fetch(`/artists/${filename}`)
-      .then((r) => {
-        if (!r.ok) throw new Error("Not found");
-        return r.json();
-      })
+    let cancelled = false;
+    loadArtistDetail(slug)
       .then((data: ArtistDetailType) => {
-        setDetail(data);
+        if (cancelled) return;
+        setLoadedDetail({ slug, data });
         setLoading(false);
       })
       .catch(() => {
+        if (cancelled) return;
         setError(true);
         setLoading(false);
       });
-  }, [slug, artists]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [slug, artists, loadArtistDetail]);
 
   const meta: TrackMeta | undefined = detail
     ? { artistLabel: detail.name, coverUrl: detail.image_url, artistSlug: slug }
     : undefined;
+
+  // Arriving from a search suggestion (/artist/:slug?play=N) queues the whole
+  // artist and starts on the chosen track, then drops the param so a reload or
+  // a back-navigation doesn't restart playback.
+  const playParam = searchParams.get("play");
+  const autoPlayedRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (playParam === null) {
+      // Param cleared — allow the same track to be picked from search again.
+      autoPlayedRef.current = null;
+      return;
+    }
+    if (!detail) return;
+
+    const key = `${slug}:${playParam}`;
+    if (autoPlayedRef.current === key) return;
+    autoPlayedRef.current = key;
+
+    const index = Number(playParam);
+    if (Number.isInteger(index) && index >= 0 && index < detail.tracks.length) {
+      const trackMeta: TrackMeta = {
+        artistLabel: detail.name,
+        coverUrl: detail.image_url,
+        artistSlug: slug,
+      };
+      clearQueue();
+      addToQueue(detail.tracks.map((r) => toTrack(r, trackMeta)));
+      playTrack(index);
+    }
+
+    setSearchParams({}, { replace: true });
+  }, [detail, playParam, slug, clearQueue, addToQueue, playTrack, setSearchParams]);
 
   const handleAddAll = () => {
     if (!detail) return;
@@ -184,6 +227,10 @@ export function ArtistDetail() {
   };
 
   const selectProps = {
+    // The mobile and desktop track panels are both mounted; sharing this state
+    // keeps them identical when the viewport crosses the md breakpoint.
+    query: trackQuery,
+    onQueryChange: setTrackQuery,
     selectMode,
     selectedIndices,
     onToggleSelect: toggleSelect,
@@ -390,6 +437,8 @@ export function ArtistDetail() {
 }
 
 interface SelectProps {
+  query: string;
+  onQueryChange: (value: string) => void;
   selectMode: boolean;
   selectedIndices: Set<number>;
   selectableCount: number;
@@ -404,6 +453,8 @@ interface SelectProps {
 function TrackSection({
   detail,
   meta,
+  query,
+  onQueryChange,
   selectMode,
   selectedIndices,
   selectableCount,
@@ -423,8 +474,6 @@ function TrackSection({
   const queue = usePlayerStore((s) => s.queue);
   const currentIndex = usePlayerStore((s) => s.currentIndex);
   const downloadSingle = useDownloadStore((s) => s.downloadSingle);
-
-  const [query, setQuery] = useState("");
 
   const allTracks = detail.tracks.map((r) => toTrack(r, meta));
 
@@ -514,13 +563,13 @@ function TrackSection({
           <input
             type="text"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => onQueryChange(e.target.value)}
             placeholder="Search tracks..."
             className="w-full bg-white/5 border border-border rounded-sm pl-8 pr-8 py-1.5 text-[13px] text-text-primary placeholder:text-text-primary/40 focus:outline-none focus:border-text-secondary transition-colors"
           />
           {query && (
             <button
-              onClick={() => setQuery("")}
+              onClick={() => onQueryChange("")}
               className="absolute right-2 top-1/2 -translate-y-1/2 text-text-primary/40 hover:text-text-primary"
               aria-label="Clear search"
             >

@@ -2,6 +2,18 @@
 
 All notable changes to the Kirtansewa catalog and player. Tags: **[Web]** = React app · **[Scraper]** = Python pipeline.
 
+## 2026-09-22
+
+- **[Web]** Catalog-wide search over all 23,239 tracks and 222 artists, replacing the old in-place artist-name filter.
+- **[Web]** Typing 3+ characters opens a YouTube-style suggestion panel under the search bar: track hits grouped by artist (3 each, with per-group "load more" that scrolls the artist into view) and an Artists tab. Arrow keys + Enter navigate it.
+- **[Web]** Enter (or "See all results") commits to a full results page at `/?q=…` with Tracks/Artists tabs and grid/list views.
+- **[Web]** Picking a track in the dropdown opens that artist's page with the track already playing; picking one on the results page queues just that artist's matching tracks, so the search doubles as a playlist.
+- **[Web]** Search runs against `search-index.json`, a build-time index fetched lazily on first use and queried through an in-memory inverted index with an LRU query cache (sub-5 ms per query).
+- **[Web]** Extracted reusable `SegmentedTabs`, `ViewToggle`, `TrackItem`, `Highlight`, `PlayingIndicator`, and artist grid/list views now shared by the catalog and search pages.
+- **[Web]** Merged the separate mobile and desktop headers into one responsive `AppHeader`. Both used to be mounted at once with their own search bar, so resizing across the `md` breakpoint revealed a stale query; the artist page's track filter is now shared between its mobile and desktop panels for the same reason.
+- **[Web]** Hovering a search suggestion no longer hijacks Enter, and the highlight clears when the pointer leaves the list.
+- **[Web]** Fixed picking a search result playing the wrong track. Moving between two artists reuses the artist page component, so the previous artist's tracks were still in state when the `?play=` handler ran — it either started the wrong artist's track at that index or, if the index was out of range, silently dropped the request. The loaded detail is now paired with its slug, so it can never be read against the wrong artist.
+
 ## 2026-06-02
 
 - **[Web]** Download a single track via the three-dots menu on any track row.

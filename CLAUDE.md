@@ -33,6 +33,7 @@ python scrape_details.py    # rebuild artists/ directory of per-artist JSONs
 2. `scrape_details.py` → `artists/<slug>.json` (per-artist tracks/metadata)
 3. Both JSON outputs are copied to `kirtansewa-web/public/artists/` so Vite serves them statically
 4. The app fetches a manifest at runtime to discover available artists
+5. `kirtansewa-web/scripts/build-search-index.mjs` → `kirtansewa-web/public/search-index.json` (every artist + every track title in one compact payload). It is generated, gitignored, and rebuilt automatically by `npm run dev` (via `predev`) and `npm run build`; run `npm run build:index` to refresh it by hand after re-scraping.
 
 **Audio hosting**: track audio files are served from S3 over HTTPS with CORS already enabled. No need to re-verify CORS/HTTPS for the media URLs.
 
@@ -43,8 +44,9 @@ python scrape_details.py    # rebuild artists/ directory of per-artist JSONs
   - `playerStore` — current track, playback state, queue (backed by Howler.js)
   - `libraryStore` — user-saved tracks/playlists
   - `dataStore` — loaded artist/track JSON data
-- **Layout**: `layout/` provides Desktop (persistent sidebar) and Mobile (drawer) variants that wrap all pages
+- **Layout**: `layout/` wraps all pages — one responsive `AppHeader`, plus Desktop (persistent sidebar) and Mobile (drawer) navigation variants. Keep breakpoint variants CSS-only within a single component where they hold state; two mounted copies of the same control drift apart on resize
 - **Audio**: Howler.js handles all playback; the player UI is `components/PlayerDock`
+- **Search**: `lib/search.ts` lazily fetches `search-index.json`, builds an inverted token index in memory, and answers queries through an LRU cache; `hooks/useSearch.ts` wraps it with debouncing. `/` shows the artist catalog and `/?q=…` the search results page (both via `pages/Home.tsx`)
 - **Drag & Drop**: `@dnd-kit` used for queue reordering
 
 ### Key type contracts (`src/types/`)

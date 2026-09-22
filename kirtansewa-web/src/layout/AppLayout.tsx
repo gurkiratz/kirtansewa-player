@@ -8,8 +8,7 @@ import { QueueSheet } from '../components/QueueSheet';
 import { AddToPlaylistModal } from '../components/AddToPlaylistModal';
 import { DownloadOverlay } from '../components/DownloadOverlay';
 import { DesktopSidebar } from './DesktopSidebar';
-import { DesktopTopBar } from './DesktopTopBar';
-import { MobileHeader } from './MobileHeader';
+import { AppHeader } from './AppHeader';
 import { MobileNavDrawer } from './MobileNavDrawer';
 
 const DEFAULT_TITLE = 'Kirtan Sewa';
@@ -199,8 +198,7 @@ export function AppLayout() {
 
       {/* Main column */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <MobileHeader onMenuOpen={() => setMobileMenuOpen(true)} />
-        <DesktopTopBar />
+        <AppHeader onMenuOpen={() => setMobileMenuOpen(true)} />
 
         <main className="flex-1 flex overflow-hidden">
           <Outlet />

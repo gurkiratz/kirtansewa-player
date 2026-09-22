@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Artist } from '../types';
+import type { Artist, ArtistDetail } from '../types';
 
 interface ManifestEntry {
   slug: string;
@@ -14,6 +14,24 @@ interface DataStore {
   trackCounts: Map<string, number>;
   loading: boolean;
   fetchAll: () => Promise<void>;
+  /**
+   * Fetch one artist's detail JSON, de-duplicated and memoised for the session.
+   * `fileHint` skips the artists.json position lookup when the caller already
+   * knows the filename (the search index carries it).
+   */
+  loadArtistDetail: (slug: string, fileHint?: string) => Promise<ArtistDetail>;
+}
+
+/**
+ * Detail files are named "{1-based position in artists.json}-{slug}.json".
+ * Kept out of the store so in-flight promises survive store updates.
+ */
+const detailCache = new Map<string, Promise<ArtistDetail>>();
+
+export function artistDetailFilename(artists: Artist[], slug: string): string | null {
+  const index = artists.findIndex((a) => a.slug === slug);
+  if (index === -1) return null;
+  return `${String(index + 1).padStart(2, '0')}-${slug}.json`;
 }
 
 const ARTISTS_KEY = 'ks:v1:artists';
@@ -44,7 +62,7 @@ function deriveFromManifest(manifest: ManifestEntry[]) {
   };
 }
 
-export const useDataStore = create<DataStore>((set) => ({
+export const useDataStore = create<DataStore>((set, get) => ({
   artists: [],
   scrapedSlugs: new Set(),
   imageUrls: new Map(),
@@ -76,5 +94,26 @@ export const useDataStore = create<DataStore>((set) => ({
       console.error('Failed to load data:', err);
       if (!hasCache) set({ loading: false });
     }
+  },
+
+  loadArtistDetail: (slug, fileHint) => {
+    const cached = detailCache.get(slug);
+    if (cached) return cached;
+
+    const file = fileHint ?? artistDetailFilename(get().artists, slug);
+    if (!file) return Promise.reject(new Error(`Unknown artist: ${slug}`));
+
+    const promise = fetch(`/artists/${file}`)
+      .then((res) => {
+        if (!res.ok) throw new Error(`Artist detail HTTP ${res.status}`);
+        return res.json() as Promise<ArtistDetail>;
+      })
+      .catch((err) => {
+        detailCache.delete(slug);
+        throw err;
+      });
+
+    detailCache.set(slug, promise);
+    return promise;
   },
 }));

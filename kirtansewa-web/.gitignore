@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Generated search index (rebuilt by `npm run dev` / `npm run build`)
+public/search-index.json
