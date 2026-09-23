@@ -32,6 +32,56 @@ function setFavicon(url: string, type: string) {
 
 const SIDEBAR_KEY = 'sidebar-collapsed';
 
+/** Intrinsic artwork dimensions, keyed by URL — measured once per session. */
+const artworkSizes = new Map<string, string>();
+
+function artworkMimeType(url: string): string {
+  const path = url.split('?')[0].toLowerCase();
+  if (path.endsWith('.png')) return 'image/png';
+  if (path.endsWith('.webp')) return 'image/webp';
+  return 'image/jpeg';
+}
+
+/**
+ * Read the artwork's real pixel dimensions. No crossOrigin here on purpose:
+ * naturalWidth/Height don't taint anything, and the CDN sends no CORS headers,
+ * so requesting it would only make the load fail.
+ */
+function measureArtwork(url: string): Promise<string | null> {
+  const cached = artworkSizes.get(url);
+  if (cached) return Promise.resolve(cached);
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      if (!img.naturalWidth || !img.naturalHeight) return resolve(null);
+      const sizes = `${img.naturalWidth}x${img.naturalHeight}`;
+      artworkSizes.set(url, sizes);
+      resolve(sizes);
+    };
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
+}
+
+function buildMetadata(
+  track: { displayName: string; artistLabel?: string },
+  artwork: string | null,
+  sizes: string | null
+): MediaMetadata {
+  return new MediaMetadata({
+    title: track.displayName,
+    artist: track.artistLabel ?? '',
+    album: 'Kirtan Sewa',
+    // One entry describing the file as it actually is. These images are large
+    // and rarely square (2560x1920 is common), so the old list of five square
+    // 96x96-512x512 entries was simply wrong, and a consumer that trusts
+    // `sizes` can drop artwork it can't reconcile.
+    artwork: artwork
+      ? [{ src: artwork, type: artworkMimeType(artwork), ...(sizes ? { sizes } : {}) }]
+      : [],
+  });
+}
+
 export function AppLayout() {
   const fetchAll = useDataStore((s) => s.fetchAll);
   const imageUrls = useDataStore((s) => s.imageUrls);
@@ -96,23 +146,24 @@ export function AppLayout() {
       document.title = DEFAULT_TITLE;
     }
 
-    // Update MediaSession metadata for lock screen / Control Center.
+    // Update MediaSession metadata for lock screen / Control Center / watch.
+    let metadataStale = false;
     if ('mediaSession' in navigator) {
       if (track) {
-        navigator.mediaSession.metadata = new MediaMetadata({
-          title: track.displayName,
-          artist: track.artistLabel ?? '',
-          album: 'Kirtan Sewa',
-          artwork: artwork
-            ? [
-                { src: artwork, sizes: '96x96', type: 'image/jpeg' },
-                { src: artwork, sizes: '192x192', type: 'image/jpeg' },
-                { src: artwork, sizes: '256x256', type: 'image/jpeg' },
-                { src: artwork, sizes: '384x384', type: 'image/jpeg' },
-                { src: artwork, sizes: '512x512', type: 'image/jpeg' },
-              ]
-            : [],
-        });
+        // Publish straight away so the controls are never empty, then refine
+        // with the artwork's real dimensions once it has been measured.
+        navigator.mediaSession.metadata = buildMetadata(
+          track,
+          artwork,
+          artwork ? artworkSizes.get(artwork) ?? null : null
+        );
+
+        if (artwork && !artworkSizes.has(artwork)) {
+          measureArtwork(artwork).then((sizes) => {
+            if (metadataStale || !sizes) return;
+            navigator.mediaSession.metadata = buildMetadata(track, artwork, sizes);
+          });
+        }
       } else {
         navigator.mediaSession.metadata = null;
       }
@@ -166,6 +217,7 @@ export function AppLayout() {
     img.src = artwork;
 
     return () => {
+      metadataStale = true;
       if (faviconObjectUrl.current) {
         URL.revokeObjectURL(faviconObjectUrl.current);
         faviconObjectUrl.current = null;
@@ -217,7 +269,13 @@ export function AppLayout() {
       <div className="flex-1 flex flex-col min-w-0 md:overflow-hidden">
         <AppHeader onMenuOpen={() => setMobileMenuOpen(true)} />
 
-        <main className="flex-1 flex md:overflow-hidden">
+        {/*
+          Page roots are flex children here, and a flex item defaults to
+          min-width:auto — it refuses to shrink below its content's min-content
+          width. That used to be hidden by overflow-hidden; now that mobile
+          scrolls the document, an over-wide page would pan sideways instead.
+        */}
+        <main className="flex-1 flex min-w-0 [&>*]:min-w-0 md:overflow-hidden">
           <Outlet />
         </main>
 

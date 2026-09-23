@@ -31,6 +31,12 @@ body,
   min-height: 100%;
   margin: 0;
   padding: 0;
+  /*
+   * Backstop against sideways panning from any one over-wide element. `clip`
+   * rather than `hidden` on purpose: hidden would make body a scroll container
+   * and break the sticky header.
+   */
+  overflow-x: clip;
   background-color: #111111;
   color: #eeeeee;
   font-family: 'Inter', system-ui, sans-serif;
